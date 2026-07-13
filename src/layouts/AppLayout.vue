@@ -2,7 +2,7 @@
   <div class="min-h-screen bg-slate-950 text-white flex">
 
     <!-- ===== SIDEBAR (desktop) ===== -->
-    <aside class="hidden md:flex w-64 flex-col fixed h-full border-r border-white/10 bg-slate-900/80 backdrop-blur-xl z-20">
+    <aside class="hidden md:flex w-64 min-w-[220px] flex-col fixed h-full border-r border-white/10 bg-slate-900/80 backdrop-blur-xl z-20">
 
       <!-- Logo -->
       <div class="p-6 border-b border-white/10">
@@ -11,8 +11,8 @@
             CW
           </div>
           <div>
-            <p class="font-black text-white leading-none">CipuyWallet</p>
-            <p class="text-[11px] text-slate-500 mt-0.5">Smart Budget Manager</p>
+            <p class="font-black text-white leading-none truncate">CipuyWallet</p>
+            <p class="text-[11px] text-slate-500 mt-0.5 truncate">Smart Budget Manager</p>
           </div>
         </RouterLink>
       </div>
@@ -61,7 +61,7 @@
     </div>
 
     <!-- ===== BOTTOM NAV (mobile) ===== -->
-    <nav class="fixed bottom-0 left-0 right-0 md:hidden z-20 border-t border-white/10 bg-slate-950/90 backdrop-blur-xl flex">
+    <nav class="fixed bottom-0 left-0 right-0 md:hidden z-20 border-t border-white/10 bg-slate-950/90 backdrop-blur-xl flex" style="padding-bottom: env(safe-area-inset-bottom)">
       <BottomNavItem to="/app"              :icon="icons.home"    label="Home" />
       <BottomNavItem to="/app/transactions" :icon="icons.tx"      label="Transaksi" />
       <BottomNavItem to="/app/budget"       :icon="icons.budget"  label="Budget" />

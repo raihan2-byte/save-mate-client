@@ -4,7 +4,7 @@
     class="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-medium"
     :class="isActive
       ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
-      : 'text-slate-400 hover:text-white hover:bg-white/5'"
+      : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'"
   >
     <span class="text-base">{{ icon }}</span>
     <span>{{ label }}</span>

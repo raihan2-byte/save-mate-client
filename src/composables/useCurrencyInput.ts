@@ -27,5 +27,9 @@ export function useCurrencyInput(initial = 0) {
     raw.value = ''
   }
 
-  return { displayValue, numericValue, reset }
+  function setValue(val: number) {
+    raw.value = val > 0 ? String(Math.round(val)) : ''
+  }
+
+  return { displayValue, numericValue, reset, setValue }
 }

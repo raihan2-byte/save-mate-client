@@ -71,4 +71,34 @@
            bg-emerald-500/10 border border-emerald-500/20 text-emerald-400
            text-xs font-semibold;
   }
+
+  /* Gradients */
+  .bg-emerald-gradient {
+    background: linear-gradient(135deg, #064e3b 0%, #065f46 50%, #047857 100%);
+  }
+  .bg-card-gradient {
+    background: linear-gradient(135deg, rgba(6,78,59,0.4) 0%, rgba(6,95,70,0.2) 100%);
+  }
+
+  /* Shadows / Glows */
+  .shadow-glow-emerald {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+  }
+  .shadow-glow-red {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+  }
+  .shadow-glow-amber {
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
+  }
+
+  /* Status colors */
+  .text-positive { @apply text-emerald-400; }
+  .text-negative { @apply text-red-400; }
+  .text-warning  { @apply text-amber-400; }
+  .text-muted    { @apply text-white/50; }
+
+  /* Page section header */
+  .section-label {
+    @apply text-xs uppercase tracking-widest text-white/40 font-semibold mb-3;
+  }
 }

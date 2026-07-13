@@ -3,177 +3,183 @@
     style="background: radial-gradient(ellipse 80% 60% at 50% -20%, rgba(16,185,129,0.15), transparent), #020617">
 
     <!-- Step indicator -->
-    <div v-if="step < 4" class="fixed top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
-      <div v-for="i in 3" :key="i"
+    <div v-if="step < 5" class="fixed top-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
+      <div v-for="i in totalIndicatorSteps" :key="i"
         class="h-1.5 rounded-full transition-all duration-500"
-        :class="i <= step ? 'bg-emerald-500 w-8' : 'bg-white/15 w-4'" />
+        :class="i <= indicatorStep ? 'bg-emerald-500 w-8' : 'bg-white/15 w-4'" />
     </div>
 
     <div class="w-full max-w-lg pt-8">
 
       <!-- ═══ STEP 1: Gaji & Profil ═══ -->
       <Transition name="slide">
-        <div v-if="step === 1" key="s1">
-          <div class="text-center mb-8">
-            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-3xl mx-auto mb-4"
-              style="box-shadow: 0 0 40px rgba(16,185,129,0.35)">💰</div>
-            <p class="text-emerald-400 text-xs font-semibold uppercase tracking-widest mb-1">Langkah 1 dari 3</p>
-            <h1 class="text-2xl font-black text-white">Berapa penghasilanmu?</h1>
-            <p class="text-slate-400 text-sm mt-1">Ini jadi dasar perhitungan budget harianmu</p>
+        <OnboardingStep1
+          v-if="step === 1"
+          :salary="salaryValue"
+          :salary-display="salaryDisplay"
+          :payday-day="s1.paydayDay"
+          :purpose="s1.purpose"
+          :purpose-custom="s1.purposeCustom"
+          @update:salary-display="salaryDisplay = $event"
+          @update:payday-day="s1.paydayDay = $event"
+          @update:purpose="s1.purpose = $event"
+          @update:purpose-custom="s1.purposeCustom = $event"
+          @next="goNext"
+        />
+      </Transition>
+
+      <!-- ═══ STEP 2: Mid-cycle Setup (only if mid-cycle) ═══ -->
+      <Transition name="slide">
+        <div v-if="step === 2" key="s2">
+          <div class="text-center mb-6">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-3xl mx-auto mb-4">📅</div>
+            <p class="text-amber-400 text-xs font-semibold uppercase tracking-widest mb-1">Setup Periode Ini</p>
+            <h1 class="text-2xl font-black text-white">Budget sampai gajian</h1>
+            <p class="text-slate-400 text-sm mt-1">Atur keuanganmu untuk <span class="text-amber-300 font-semibold">{{ daysToNextPayday }} hari</span> ke depan</p>
           </div>
 
-          <div class="glass-card p-6 space-y-5">
-            <div>
-              <label class="block text-sm font-medium text-slate-300 mb-1.5">Gaji / Penghasilan Bulanan</label>
+          <div class="space-y-4">
+            <!-- Sisa uang -->
+            <div class="glass-card p-5">
+              <label class="block text-sm font-semibold text-white mb-3">💰 Sisa uangmu sekarang</label>
               <div class="relative">
                 <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">Rp</span>
-                <input v-model="salaryDisplay" type="text" inputmode="numeric"
-                  class="input-dark pl-10" placeholder="5.000.000" />
+                <input v-model="currentBalanceDisplay" type="text" inputmode="numeric"
+                  class="input-dark pl-10" placeholder="500.000" />
               </div>
-              <p class="text-slate-600 text-xs mt-1">Masukkan gaji bersih atau total penghasilan tetap per bulan</p>
+              <p class="text-slate-500 text-xs mt-1.5">Total uang di rekening + dompet sekarang</p>
             </div>
 
-            <div>
-              <label class="block text-sm font-medium text-slate-300 mb-1.5">Kota / Wilayah Tinggal</label>
-              <div v-if="regionsLoading" class="input-dark flex items-center gap-2 text-slate-500 text-sm">
-                <span class="w-3 h-3 rounded-full border-2 border-slate-500 border-t-transparent animate-spin flex-shrink-0" />
-                Memuat daftar kota...
+            <!-- Pengeluaran pending -->
+            <div class="glass-card p-5">
+              <div class="flex items-center justify-between mb-3">
+                <label class="text-sm font-semibold text-white">🏠 Ada yang belum dibayar sebelum gajian?</label>
               </div>
-              <select v-else v-model="s1.region" class="input-dark">
-                <option value="" disabled>Pilih kota/wilayah...</option>
-                <option v-for="r in regions" :key="r.region_id" :value="r.region_name">
-                  {{ r.region_name }}
-                </option>
-              </select>
-              <p class="text-slate-600 text-xs mt-1">Digunakan sebagai referensi baseline biaya hidup</p>
+              <p class="text-slate-400 text-xs mb-4">Misal: kost, listrik, cicilan, dll. yang masih harus keluar sebelum tgl {{ s1.paydayDay }}</p>
+
+              <div v-if="pendingItems.length > 0" class="space-y-2 mb-4">
+                <div v-for="(item, idx) in pendingItems" :key="idx"
+                  class="flex items-center gap-3 p-2.5 rounded-xl bg-white/5 border border-white/5">
+                  <div class="flex-1 min-w-0">
+                    <p class="text-white text-sm font-medium truncate">{{ item.description }}</p>
+                    <p class="text-red-400 text-xs font-semibold">{{ fmtCur(item.amount) }}</p>
+                  </div>
+                  <button @click="pendingItems.splice(idx, 1)" class="text-slate-600 hover:text-red-400 transition-colors">✕</button>
+                </div>
+                <div class="flex justify-between items-center px-1 pt-1 border-t border-white/10">
+                  <span class="text-slate-400 text-xs">Total pending</span>
+                  <span class="text-red-400 font-bold text-sm">{{ fmtCur(totalPending) }}</span>
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <input v-model="pendingForm.description" type="text" class="input-dark"
+                  placeholder="Nama pengeluaran (kost, listrik...)" maxlength="60" />
+                <div class="flex gap-2">
+                  <div class="relative flex-1">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">Rp</span>
+                    <input v-model="pendingAmountDisplay" type="text" inputmode="numeric"
+                      class="input-dark pl-9" placeholder="0" />
+                  </div>
+                  <AppButton variant="outline" @click="pushPending" :disabled="!pendingFormValid">
+                    + Tambah
+                  </AppButton>
+                </div>
+              </div>
+
+              <div v-if="currentBalanceValue > 0" class="mt-4 rounded-xl border px-4 py-3 flex items-center justify-between"
+                :class="netBalance >= 0 ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-red-500/30 bg-red-500/10'">
+                <span class="text-slate-400 text-sm">Sisa bersih untuk {{ daysToNextPayday }} hari</span>
+                <span class="font-black text-lg" :class="netBalance >= 0 ? 'text-emerald-400' : 'text-red-400'">{{ fmtCur(Math.max(0, netBalance)) }}</span>
+              </div>
             </div>
 
-            <div>
-              <label class="block text-sm font-medium text-slate-300 mb-2">Tujuan Pakai CipuyWallet</label>
-              <div class="grid grid-cols-2 gap-2">
-                <button v-for="opt in purposeOptions" :key="opt.value" type="button"
-                  @click="selectPurpose(opt.value)"
-                  class="text-left px-3 py-2.5 rounded-xl border text-sm transition-all"
-                  :class="s1.purpose === opt.value
-                    ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300'
-                    : 'border-white/10 bg-white/5 text-slate-300 hover:border-white/20'">
-                  <span class="block text-base mb-0.5">{{ opt.icon }}</span>
-                  {{ opt.label }}
+            <!-- Pilih mode interim -->
+            <div class="glass-card p-5">
+              <p class="text-white font-semibold text-sm mb-1">🎯 Pilih mode untuk {{ daysToNextPayday }} hari ini</p>
+              <p class="text-slate-500 text-xs mb-4">Setelah gajian, mode ini akan reset ke pilihan utama kamu</p>
+              <div class="space-y-2.5">
+                <button v-for="opt in savingStrategies" :key="opt.type" type="button"
+                  @click="s2.strategy = opt.type"
+                  class="w-full text-left rounded-2xl border p-3.5 transition-all"
+                  :class="s2.strategy === opt.type
+                    ? 'border-amber-500 bg-amber-500/10'
+                    : 'border-white/10 bg-white/5 hover:border-white/20'">
+                  <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                      <span class="text-xl">{{ opt.icon }}</span>
+                      <div>
+                        <p class="font-bold text-white text-sm">{{ opt.label }}</p>
+                        <p class="text-slate-500 text-xs">{{ opt.desc }}</p>
+                      </div>
+                    </div>
+                    <div class="w-4 h-4 rounded-full border-2 flex-shrink-0 transition-all"
+                      :class="s2.strategy === opt.type ? 'border-amber-500 bg-amber-500' : 'border-slate-600'" />
+                  </div>
+                  <div v-if="currentBalanceValue > 0 && s2.strategy === opt.type" class="grid grid-cols-3 gap-2 mt-3">
+                    <div class="bg-white/5 rounded-xl p-2 text-center">
+                      <p class="text-[10px] text-slate-500 mb-0.5">Budget/hari</p>
+                      <p class="font-black text-amber-400 text-sm">{{ fmtCurShort(calcMidCycle(opt.type).dailyFlexible) }}</p>
+                    </div>
+                    <div class="bg-white/5 rounded-xl p-2 text-center">
+                      <p class="text-[10px] text-slate-500 mb-0.5">Makan/hari</p>
+                      <p class="font-black text-white text-sm">{{ fmtCurShort(calcMidCycle(opt.type).dailyFood) }}</p>
+                    </div>
+                    <div class="bg-white/5 rounded-xl p-2 text-center">
+                      <p class="text-[10px] text-slate-500 mb-0.5">Nabung</p>
+                      <p class="font-black text-emerald-400 text-sm">{{ fmtCurShort(calcMidCycle(opt.type).savings) }}</p>
+                    </div>
+                  </div>
                 </button>
               </div>
-              <input v-if="s1.purpose === '__other__'" v-model="s1.purposeCustom" type="text"
-                maxlength="50" class="input-dark mt-2" placeholder="Ceritakan tujuanmu..." />
             </div>
 
-            <button @click="goStep2" :disabled="!step1Valid"
-              class="w-full py-3.5 rounded-2xl font-bold text-white text-sm transition-all disabled:opacity-40"
-              style="background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 0 30px rgba(16,185,129,0.3)">
-              Lanjut → Pengeluaran Wajib
-            </button>
+            <div class="flex flex-col sm:flex-row gap-3">
+              <AppButton variant="outline" class="flex-1" @click="step = 1">← Kembali</AppButton>
+              <AppButton variant="primary" class="flex-1" :disabled="!step2Valid" @click="goToStep3">
+                Lanjut → Pengeluaran Tetap
+              </AppButton>
+            </div>
           </div>
         </div>
       </Transition>
 
-      <!-- ═══ STEP 2: Mandatory Expenses ═══ -->
+      <!-- ═══ STEP 3: Mandatory Expenses ═══ -->
       <Transition name="slide">
-        <div v-if="step === 2" key="s2">
+        <div v-if="step === 3" key="s3">
           <div class="text-center mb-6">
             <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center text-3xl mx-auto mb-4">🏠</div>
-            <p class="text-cyan-400 text-xs font-semibold uppercase tracking-widest mb-1">Langkah 2 dari 3</p>
+            <p class="text-cyan-400 text-xs font-semibold uppercase tracking-widest mb-1">{{ isMidCycle ? 'Langkah 3' : 'Langkah 2' }} dari {{ totalIndicatorSteps }}</p>
             <h1 class="text-2xl font-black text-white">Pengeluaran Wajib</h1>
-            <p class="text-slate-400 text-sm mt-1">Input biaya tetap yang pasti keluar setiap bulan</p>
+            <p class="text-slate-400 text-sm mt-1">Biaya tetap yang keluar setiap bulan</p>
           </div>
 
-          <div class="glass-card p-5 mb-4">
-            <!-- Expense list -->
-            <div v-if="mandatoryItems.length === 0" class="text-center py-6 text-slate-500 text-sm">
-              Belum ada pengeluaran wajib. Tap tombol di bawah untuk tambah.
-            </div>
-            <div v-else class="space-y-2 mb-4">
-              <div v-for="(item, idx) in mandatoryItems" :key="idx"
-                class="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5">
-                <span class="text-xl flex-shrink-0">{{ mandatoryCatMeta[item.category]?.icon ?? '📦' }}</span>
-                <div class="flex-1 min-w-0">
-                  <p class="text-white text-sm font-medium truncate">{{ item.description }}</p>
-                  <p class="text-slate-500 text-xs">{{ mandatoryCatMeta[item.category]?.label }}</p>
-                </div>
-                <span class="text-emerald-400 font-bold text-sm tabular-nums flex-shrink-0">{{ fmtCur(item.amount) }}</span>
-                <button @click="mandatoryItems.splice(idx, 1)" class="text-slate-600 hover:text-red-400 transition-colors ml-1">✕</button>
-              </div>
-            </div>
+          <OnboardingStep2
+            :items="mandatoryItems"
+            :salary="salaryValue"
+            @update:items="mandatoryItems = $event"
+          />
 
-            <!-- Total -->
-            <div class="flex justify-between items-center px-1 py-2 border-t border-white/10 mt-2">
-              <span class="text-slate-400 text-sm">Total Wajib</span>
-              <span class="font-black" :class="availableNegative ? 'text-red-400' : 'text-white'">{{ fmtCur(totalMandatory) }}</span>
-            </div>
-            <div class="flex justify-between items-center px-1 pb-1">
-              <span class="text-slate-500 text-xs">Sisa untuk dikelola</span>
-              <span class="font-bold text-sm" :class="availableNegative ? 'text-red-400' : 'text-emerald-400'">{{ fmtCur(available) }}</span>
-            </div>
-            <!-- Negative warning -->
-            <div v-if="availableNegative" class="mt-3 flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
-              <span class="text-base flex-shrink-0">🚫</span>
-              <p class="text-red-300 text-xs">Pengeluaran wajib melebihi gaji. Hapus atau kurangi beberapa item agar budget tetap positif.</p>
-            </div>
-          </div>
-
-          <!-- Add item form -->
-          <div class="glass-card p-5 mb-4">
-            <p class="text-white font-semibold text-sm mb-3">＋ Tambah Pengeluaran Wajib</p>
-            <div class="space-y-3">
-              <div class="grid grid-cols-3 gap-2">
-                <button v-for="cat in mandatoryCategories" :key="cat.value" type="button"
-                  @click="addForm.category = cat.value"
-                  class="flex flex-col items-center gap-1 py-2 px-1 rounded-xl border text-xs transition-all"
-                  :class="addForm.category === cat.value
-                    ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300'
-                    : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'">
-                  <span class="text-base">{{ cat.icon }}</span>
-                  {{ cat.label }}
-                </button>
-              </div>
-              <div class="relative">
-                <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">Rp</span>
-                <input v-model="addAmountDisplay" type="text" inputmode="numeric"
-                  class="input-dark pl-10" placeholder="0" />
-              </div>
-              <input v-model="addForm.description" type="text" class="input-dark"
-                placeholder="Kost, ojek bulanan, WiFi, dll." maxlength="100" />
-              <p v-if="addAmountValue > 0 && (totalMandatory + addAmountValue) >= salaryValue" class="text-red-400 text-xs">
-                ⚠️ Akan melebihi gaji (sisa: {{ fmtCur(salaryValue - totalMandatory) }})
-              </p>
-              <button @click="pushMandatory"
-                :disabled="!addFormValid || (totalMandatory + addAmountValue) >= salaryValue"
-                class="w-full py-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-semibold text-sm hover:bg-emerald-500/30 transition-all disabled:opacity-40">
-                Tambah
-              </button>
-            </div>
-          </div>
-
-          <div class="flex gap-3">
-            <button @click="step = 1" class="btn-secondary flex-1">← Kembali</button>
-            <button @click="step = 3" :disabled="availableNegative"
-              class="flex-1 py-3 rounded-2xl font-bold text-white text-sm transition-all disabled:opacity-40"
-              style="background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 0 20px rgba(16,185,129,0.25)">
+          <div class="flex flex-col sm:flex-row gap-3 mt-4">
+            <AppButton variant="outline" class="flex-1" @click="step = isMidCycle ? 2 : 1">← Kembali</AppButton>
+            <AppButton variant="primary" class="flex-1" :disabled="availableNegative" @click="step = 4">
               Lanjut → Strategi Menabung
-            </button>
+            </AppButton>
           </div>
           <p class="text-center text-slate-600 text-xs mt-3">Pengeluaran wajib bisa ditambah belakangan</p>
         </div>
       </Transition>
 
-      <!-- ═══ STEP 3: Saving Strategy ═══ -->
+      <!-- ═══ STEP 4: Saving Strategy ═══ -->
       <Transition name="slide">
-        <div v-if="step === 3" key="s3">
+        <div v-if="step === 4" key="s4">
           <div class="text-center mb-6">
             <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-400 to-violet-600 flex items-center justify-center text-3xl mx-auto mb-4">🎯</div>
-            <p class="text-violet-400 text-xs font-semibold uppercase tracking-widest mb-1">Langkah 3 dari 3</p>
-            <h1 class="text-2xl font-black text-white">Pilih Strategi</h1>
-            <p class="text-slate-400 text-sm mt-1">Seberapa agresif kamu mau menabung?</p>
+            <p class="text-violet-400 text-xs font-semibold uppercase tracking-widest mb-1">Langkah {{ totalIndicatorSteps }} dari {{ totalIndicatorSteps }}</p>
+            <h1 class="text-2xl font-black text-white">Pilih Strategi Utama</h1>
+            <p class="text-slate-400 text-sm mt-1">Untuk bulan-bulan ke depan setelah gajian</p>
           </div>
 
-          <!-- Available overview -->
           <div class="glass-card p-4 mb-4 flex items-center gap-3">
             <div class="w-10 h-10 rounded-xl bg-emerald-500/15 flex items-center justify-center text-xl flex-shrink-0">💼</div>
             <div>
@@ -182,164 +188,52 @@
             </div>
           </div>
 
-          <!-- Strategy cards -->
-          <div class="space-y-3 mb-5">
-            <button v-for="opt in savingStrategies" :key="opt.type" type="button"
-              @click="s3.saving_type = opt.type"
-              class="w-full text-left rounded-2xl border p-4 transition-all"
-              :class="s3.saving_type === opt.type
-                ? 'border-emerald-500 bg-emerald-500/10'
-                : 'border-white/10 bg-white/5 hover:border-white/20'">
-              <div class="flex items-start justify-between gap-3">
-                <div class="flex items-center gap-2 mb-2">
-                  <span class="text-2xl">{{ opt.icon }}</span>
-                  <div>
-                    <p class="font-black text-white text-sm">{{ opt.label }}</p>
-                    <p class="text-slate-500 text-xs">{{ opt.desc }}</p>
-                  </div>
-                </div>
-                <div class="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 transition-all"
-                  :class="s3.saving_type === opt.type ? 'border-emerald-500 bg-emerald-500' : 'border-slate-600'">
-                  <div v-if="s3.saving_type === opt.type" class="w-2 h-2 rounded-full bg-white" />
-                </div>
-              </div>
+          <OnboardingStep4
+            :saving-type="s4.saving_type"
+            @update:saving-type="s4.saving_type = $event"
+          />
 
-              <!-- Preview numbers -->
-              <div class="grid grid-cols-3 gap-2 mt-1">
-                <div class="bg-white/5 rounded-xl p-2 text-center">
-                  <p class="text-xs text-slate-500 mb-0.5">Tabungan/bln</p>
-                  <p class="font-black text-emerald-400 text-sm">{{ fmtCurShort(calcFor(opt.type).savings) }}</p>
-                </div>
-                <div class="bg-white/5 rounded-xl p-2 text-center">
-                  <p class="text-xs text-slate-500 mb-0.5">Budget/hari</p>
-                  <p class="font-black text-cyan-400 text-sm">{{ fmtCurShort(calcFor(opt.type).dailyFlexible) }}</p>
-                </div>
-                <div class="bg-white/5 rounded-xl p-2 text-center">
-                  <p class="text-xs text-slate-500 mb-0.5">Makan/hari</p>
-                  <p class="font-black text-white text-sm">{{ fmtCurShort(calcFor(opt.type).dailyFood) }}</p>
-                </div>
-              </div>
-            </button>
-          </div>
-
-          <div class="flex gap-3">
-            <button @click="step = 2" class="btn-secondary flex-1">← Kembali</button>
-            <button @click="startCalc" :disabled="!s3.saving_type"
-              class="flex-1 py-3 rounded-2xl font-bold text-white text-sm transition-all disabled:opacity-40"
-              style="background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 0 20px rgba(16,185,129,0.25)">
+          <div class="flex flex-col sm:flex-row gap-3 mt-4">
+            <AppButton variant="outline" class="flex-1" @click="step = 3">← Kembali</AppButton>
+            <AppButton variant="primary" class="flex-1" :disabled="!s4.saving_type" @click="startCalc">
               ✨ Buat Rencana Budget!
-            </button>
+            </AppButton>
           </div>
         </div>
       </Transition>
 
-      <!-- ═══ STEP 4: Calculating Animation ═══ -->
+      <!-- ═══ STEP 5: Calculating Animation ═══ -->
       <Transition name="fade">
-        <div v-if="step === 4" key="s4" class="text-center py-10">
-          <div class="relative w-24 h-24 mx-auto mb-8">
-            <div class="absolute inset-0 rounded-full border-4 border-emerald-500/20" />
-            <div class="absolute inset-0 rounded-full border-4 border-t-emerald-500 animate-spin" />
-            <div class="absolute inset-0 flex items-center justify-center text-3xl">💡</div>
-          </div>
-
-          <h2 class="text-2xl font-black text-white mb-2">{{ calcPhase.title }}</h2>
-          <p class="text-slate-400 text-sm mb-8">{{ calcPhase.subtitle }}</p>
-
-          <!-- Animated counters -->
-          <div class="glass-card p-5 space-y-4 text-left max-w-sm mx-auto">
-            <div v-for="(item, i) in calcItems" :key="i"
-              class="flex justify-between items-center"
-              :class="i < calcRevealCount ? 'opacity-100' : 'opacity-20'"
-              style="transition: opacity 0.4s">
-              <span class="text-slate-400 text-sm">{{ item.label }}</span>
-              <span class="font-black tabular-nums" :class="item.color">
-                {{ i < calcRevealCount ? fmtCur(item.value) : '—' }}
-              </span>
-            </div>
-          </div>
-
-          <p v-if="calcError" class="mt-4 text-red-400 text-sm">{{ calcError }}</p>
-        </div>
+        <OnboardingStep5
+          v-if="step === 5"
+          :salary="salaryValue"
+          :mandatory="totalMandatory"
+          :saving-type="s4.saving_type"
+          :region="s1.region"
+          :loading="true"
+          :error="calcError"
+          :calc-reveal-count="calcRevealCount"
+          :calc-phase-idx="calcPhaseIdx"
+        />
       </Transition>
 
-      <!-- ═══ STEP 5: Plan Ready! ═══ -->
+      <!-- ═══ STEP 6: Plan Ready! ═══ -->
       <Transition name="fade">
-        <div v-if="step === 5" key="s5">
-          <div class="text-center mb-6">
-            <div class="text-5xl mb-3">🎉</div>
-            <h1 class="text-2xl font-black text-white">Rencana Keuanganmu Siap!</h1>
-            <p class="text-slate-400 text-sm mt-1">Berdasarkan data yang kamu masukkan</p>
-          </div>
-
-          <!-- Envelope visual -->
-          <div class="grid grid-cols-2 gap-3 mb-4">
-            <div class="rounded-2xl p-4 border border-red-500/20 bg-red-500/5">
-              <p class="text-red-400 text-xs font-semibold mb-1">📕 Tabungan Harian</p>
-              <p class="text-2xl font-black text-white">{{ fmtCurShort(finalPlan.dailySavings) }}</p>
-              <p class="text-slate-500 text-xs mt-1">{{ fmtCur(finalPlan.savings) }}/bulan</p>
-              <p class="text-red-300/60 text-[10px] mt-1">Non-negotiable 🔒</p>
-            </div>
-            <div class="rounded-2xl p-4 border border-cyan-500/20 bg-cyan-500/5">
-              <p class="text-cyan-400 text-xs font-semibold mb-1">🟦 Budget Harian</p>
-              <p class="text-2xl font-black text-white">{{ fmtCurShort(finalPlan.dailyFlexible) }}</p>
-              <p class="text-slate-500 text-xs mt-1">{{ fmtCur(finalPlan.flexible) }}/bulan</p>
-              <p class="text-cyan-300/60 text-[10px] mt-1">Fleksibel 🛒</p>
-            </div>
-          </div>
-
-          <!-- Breakdown -->
-          <div class="glass-card p-5 mb-4">
-            <p class="text-white font-bold mb-3">Rincian Budget Harian</p>
-            <div class="space-y-2">
-              <div v-for="cat in finalPlan.breakdown" :key="cat.label"
-                class="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
-                <div class="flex items-center gap-2">
-                  <span>{{ cat.icon }}</span>
-                  <div>
-                    <p class="text-white text-sm">{{ cat.label }}</p>
-                    <div class="h-1.5 rounded-full bg-white/10 w-24 mt-1 overflow-hidden">
-                      <div class="h-full rounded-full transition-all duration-1000" :class="cat.barColor" :style="{ width: cat.pct + '%' }" />
-                    </div>
-                  </div>
-                </div>
-                <span class="font-bold text-sm tabular-nums" :class="cat.color">{{ fmtCurShort(cat.daily) }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Mandatory card -->
-          <div class="glass-card p-4 mb-6 flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-slate-500/20 flex items-center justify-center text-xl flex-shrink-0">⚙️</div>
+        <div v-if="step === 6" key="s6">
+          <!-- Mid-cycle note -->
+          <div v-if="isMidCycle" class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4 mb-4 flex items-start gap-3">
+            <span class="text-xl flex-shrink-0">📅</span>
             <div>
-              <p class="text-slate-300 text-sm font-medium">Pengeluaran Wajib (auto-deducted)</p>
-              <p class="text-white font-bold">{{ fmtCur(totalMandatory) }}/bulan</p>
+              <p class="text-amber-300 text-sm font-bold">Mode: {{ savingStrategies.find(s => s.type === s2.strategy)?.label }} ({{ daysToNextPayday }} hari)</p>
+              <p class="text-slate-400 text-xs mt-0.5">Setelah gajian tgl {{ s1.paydayDay }}, budget akan reset otomatis ke mode <span class="text-white font-medium">{{ savingStrategies.find(s => s.type === s4.saving_type)?.label }}</span> penuh.</p>
             </div>
           </div>
 
-          <!-- Carryover info note -->
-          <div class="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 p-4 mb-4">
-            <p class="text-emerald-400 text-xs font-bold uppercase tracking-widest mb-2">💡 Gimana kalau ada sisa?</p>
-            <p class="text-slate-300 text-sm leading-relaxed">
-              Kalau budget harianmu <span class="text-white font-semibold">tidak habis</span>, kamu bisa pilih:
-            </p>
-            <div class="mt-2 space-y-1.5">
-              <div class="flex items-start gap-2">
-                <span class="text-emerald-400 text-xs mt-0.5">➡️</span>
-                <p class="text-slate-400 text-xs"><span class="text-white font-medium">Bawa ke besok</span> — budget besok jadi lebih besar dari biasanya</p>
-              </div>
-              <div class="flex items-start gap-2">
-                <span class="text-emerald-400 text-xs mt-0.5">🏦</span>
-                <p class="text-slate-400 text-xs"><span class="text-white font-medium">Masuk tabungan</span> — sisa masuk tabungan bulan ini, besok reset ke budget normal</p>
-              </div>
-            </div>
-            <p class="text-slate-500 text-[11px] mt-3 border-t border-white/5 pt-2">Pilihan ini muncul otomatis setiap pagi kalau ada sisa dari hari sebelumnya.</p>
-          </div>
-
-          <button @click="finish"
-            class="w-full py-4 rounded-2xl font-black text-white text-base transition-all"
-            style="background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 0 40px rgba(16,185,129,0.35)">
-            🚀 Mulai Tracking Sekarang!
-          </button>
+          <OnboardingStep6
+            :plan="finalPlan"
+            :mandatory="totalMandatory"
+            @done="finish"
+          />
         </div>
       </Transition>
 
@@ -348,11 +242,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useCurrencyInput } from '@/composables/useCurrencyInput'
+import { SAVING_TYPES, FOOD_SPEND_PCT, LIFESTYLE_SPEND_PCT, DEFAULT_MONTH_DAYS } from '@/constants/budgetConfig'
+import AppButton from '@/components/ui/AppButton.vue'
+import OnboardingStep1 from '@/components/onboarding/OnboardingStep1.vue'
+import OnboardingStep2 from '@/components/onboarding/OnboardingStep2.vue'
+import OnboardingStep4 from '@/components/onboarding/OnboardingStep4.vue'
+import OnboardingStep5 from '@/components/onboarding/OnboardingStep5.vue'
+import OnboardingStep6 from '@/components/onboarding/OnboardingStep6.vue'
+import type { MandatoryItem } from '@/components/onboarding/OnboardingStep2.vue'
+import type { FinalPlan } from '@/components/onboarding/OnboardingStep6.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -360,174 +263,239 @@ const auth = useAuthStore()
 // ── Regions ──────────────────────────────────────────────────────────
 const regions = ref<any[]>([])
 const regionsLoading = ref(true)
-
 api.get('/regions/').then(res => {
   const raw = res.data.data
   regions.value = Array.isArray(raw) ? raw : (raw ? [raw] : [])
 }).catch(() => {}).finally(() => { regionsLoading.value = false })
 
 // ── Currency inputs ──────────────────────────────────────────────────
-const { displayValue: salaryDisplay, numericValue: salaryValue, reset: resetSalary } = useCurrencyInput()
-const { displayValue: addAmountDisplay, numericValue: addAmountValue, reset: resetAddAmount } = useCurrencyInput()
+const { displayValue: salaryDisplay, numericValue: salaryValue } = useCurrencyInput()
+const { displayValue: currentBalanceDisplay, numericValue: currentBalanceValue } = useCurrencyInput()
+const { displayValue: pendingAmountDisplay, numericValue: pendingAmountValue, reset: resetPendingAmount } = useCurrencyInput()
 
 // ── Step state ───────────────────────────────────────────────────────
 const step = ref(1)
 
-// ── Step 1 ───────────────────────────────────────────────────────────
-const s1 = ref({ region: '', purpose: '', purposeCustom: '' })
+// ── Step 1 ──────────────────────────────────────────────────────────
+const s1 = ref({ region: '', purpose: '', purposeCustom: '', paydayDay: 25 })
 
-const purposeOptions = [
-  { value: 'Hemat lebih banyak setiap bulan',   icon: '💰', label: 'Hemat lebih banyak' },
-  { value: 'Tracking pengeluaran harian',        icon: '📊', label: 'Tracking pengeluaran' },
-  { value: 'Menabung untuk tujuan tertentu',     icon: '🎯', label: 'Nabung untuk tujuan' },
-  { value: 'Belajar mengatur keuangan',          icon: '📚', label: 'Belajar keuangan' },
-  { value: 'Melunasi hutang lebih cepat',        icon: '⚡', label: 'Lunasi hutang' },
-  { value: '__other__',                           icon: '✏️', label: 'Lainnya...' },
-]
+const isMidCycle = computed(() => {
+  const today = new Date().getDate()
+  return s1.value.paydayDay > 0 && today !== s1.value.paydayDay
+})
 
-function selectPurpose(val: string) {
-  s1.value.purpose = val
-  if (val !== '__other__') s1.value.purposeCustom = ''
-}
+const daysToNextPayday = computed(() => {
+  const now = new Date()
+  const today = now.getDate()
+  const payday = s1.value.paydayDay
+  const sameMonth = today < payday
+  const nextPayday = new Date(now.getFullYear(), now.getMonth() + (sameMonth ? 0 : 1), payday)
+  return Math.max(1, Math.ceil((nextPayday.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+})
+
+const nextPaydayMonth = computed(() => {
+  const now = new Date()
+  const today = now.getDate()
+  const payday = s1.value.paydayDay
+  const sameMonth = today < payday
+  return sameMonth ? now.getMonth() + 1 : (now.getMonth() + 1) % 12 + 1
+})
+
+const nextPaydayYear = computed(() => {
+  const now = new Date()
+  const today = now.getDate()
+  const payday = s1.value.paydayDay
+  const sameMonth = today < payday
+  const isDecember = now.getMonth() === 11
+  return (!sameMonth && isDecember) ? now.getFullYear() + 1 : now.getFullYear()
+})
+
+const midCycleSpansTwoMonths = computed(() => {
+  if (!isMidCycle.value) return false
+  const today = new Date().getDate()
+  return today > s1.value.paydayDay
+})
+
+const daysRemainingCurrentMonth = computed(() => {
+  const now = new Date()
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+  return lastDay - now.getDate() + 1
+})
 
 const purposeValue = computed(() =>
   s1.value.purpose === '__other__' ? s1.value.purposeCustom : s1.value.purpose
 )
 
-const step1Valid = computed(() =>
-  salaryValue.value > 0 && s1.value.region.trim().length > 0 && purposeValue.value.trim().length > 0
-)
-
-function goStep2() {
-  if (!step1Valid.value) return
-  step.value = 2
+function goNext() {
+  step.value = isMidCycle.value ? 2 : 3
 }
 
-// ── Step 2 ───────────────────────────────────────────────────────────
-interface MandatoryItem { category: string; amount: number; description: string }
+// ── Step 2: Mid-cycle ────────────────────────────────────────────────
+const s2 = ref({ strategy: '' })
+
+interface PendingItem { description: string; amount: number }
+const pendingItems = ref<PendingItem[]>([])
+const pendingForm = ref({ description: '' })
+
+const pendingFormValid = computed(() =>
+  pendingForm.value.description.trim().length >= 2 && pendingAmountValue.value > 0
+)
+
+function pushPending() {
+  if (!pendingFormValid.value) return
+  pendingItems.value.push({ description: pendingForm.value.description.trim(), amount: pendingAmountValue.value })
+  pendingForm.value.description = ''
+  resetPendingAmount()
+}
+
+const totalPending = computed(() => pendingItems.value.reduce((s, i) => s + i.amount, 0))
+const netBalance = computed(() => currentBalanceValue.value - totalPending.value)
+const step2Valid = computed(() => currentBalanceValue.value > 0 && s2.value.strategy !== '')
+
+// ── Step 3: Mandatory Expenses ───────────────────────────────────────
 const mandatoryItems = ref<MandatoryItem[]>([])
 
-const mandatoryCategories = [
-  { value: 'housing',      icon: '🏠', label: 'Tempat tinggal' },
-  { value: 'transport',    icon: '🚗', label: 'Transportasi' },
-  { value: 'utilities',    icon: '📱', label: 'Utilitas' },
-  { value: 'subscription', icon: '💳', label: 'Langganan' },
-  { value: 'other',        icon: '📦', label: 'Lainnya' },
-]
-
-const mandatoryCatMeta: Record<string, { icon: string; label: string }> = {
-  housing:      { icon: '🏠', label: 'Tempat tinggal' },
-  transport:    { icon: '🚗', label: 'Transportasi' },
-  utilities:    { icon: '📱', label: 'Utilitas' },
-  subscription: { icon: '💳', label: 'Langganan' },
-  other:        { icon: '📦', label: 'Lainnya' },
+function guessCategoryFromDescription(desc: string): string {
+  const d = desc.toLowerCase()
+  if (/kost|sewa|kontrakan|rumah|apartemen/.test(d)) return 'housing'
+  if (/listrik|air|pam|wifi|internet|gas|token/.test(d)) return 'utilities'
+  if (/ojek|motor|bensin|bbm|grab|gojek|bus|commuter|krl|toll|parkir/.test(d)) return 'transport'
+  if (/netflix|spotify|icloud|youtube|langganan|subscription/.test(d)) return 'subscription'
+  return 'other'
 }
 
-const addForm = ref({ category: '', description: '' })
-const addFormValid = computed(() =>
-  addForm.value.category && addAmountValue.value > 0 && addForm.value.description.trim().length >= 3
-)
-
-function pushMandatory() {
-  if (!addFormValid.value) return
-  const newTotal = totalMandatory.value + addAmountValue.value
-  if (newTotal >= salaryValue.value) return
-  mandatoryItems.value.push({
-    category: addForm.value.category,
-    amount: addAmountValue.value,
-    description: addForm.value.description.trim(),
-  })
-  addForm.value = { category: '', description: '' }
-  resetAddAmount()
+function goToStep3() {
+  if (pendingItems.value.length > 0) {
+    const existing = new Set(mandatoryItems.value.map(m => m.description.toLowerCase()))
+    for (const p of pendingItems.value) {
+      if (!existing.has(p.description.toLowerCase())) {
+        mandatoryItems.value.push({
+          description: p.description,
+          amount: p.amount,
+          category: guessCategoryFromDescription(p.description),
+        })
+      }
+    }
+  }
+  step.value = 3
 }
 
 const totalMandatory = computed(() => mandatoryItems.value.reduce((s, i) => s + i.amount, 0))
 const available = computed(() => salaryValue.value - totalMandatory.value)
 const availableNegative = computed(() => available.value < 0)
 
-// ── Step 3 ───────────────────────────────────────────────────────────
-const s3 = ref({ saving_type: '' })
+// ── Step 4: Strategy ─────────────────────────────────────────────────
+const s4 = ref({ saving_type: '' })
 
 const savingStrategies = [
-  { type: 'frugal',         icon: '🧊', label: 'Frugal',         desc: 'Hemat ketat — prioritas tabungan maksimal', savePct: 0.65, spendPct: 0.35 },
-  { type: 'recommendation', icon: '✅', label: 'Rekomendasi',    desc: 'Seimbang — enjoy hidup & tetap nabung', savePct: 0.45, spendPct: 0.55 },
-  { type: 'normal',         icon: '😊', label: 'Normal',         desc: 'Fleksibel — santai, belanja lebih bebas', savePct: 0.25, spendPct: 0.75 },
+  {
+    type: 'frugal',
+    icon: '🧊',
+    label: 'Frugal',
+    desc: 'Hemat ketat — prioritas tabungan maksimal',
+    savePct: SAVING_TYPES.frugal.save,
+    spendPct: SAVING_TYPES.frugal.spend,
+  },
+  {
+    type: 'recommendation',
+    icon: '✅',
+    label: 'Rekomendasi',
+    desc: 'Seimbang — enjoy hidup & tetap nabung',
+    savePct: SAVING_TYPES.recommendation.save,
+    spendPct: SAVING_TYPES.recommendation.spend,
+  },
+  {
+    type: 'normal',
+    icon: '😊',
+    label: 'Normal',
+    desc: 'Fleksibel — santai, belanja lebih bebas',
+    savePct: SAVING_TYPES.normal.save,
+    spendPct: SAVING_TYPES.normal.spend,
+  },
 ]
 
 function calcFor(type: string) {
-  const strat = savingStrategies.find(s => s.type === type)!
+  const strat = SAVING_TYPES[type] ?? SAVING_TYPES.recommendation
   const avail = Math.max(0, available.value)
-  const flexible = avail * strat.spendPct
-  const savings = avail * strat.savePct
-  const food = flexible * 0.65
+  const flexible = avail * strat.spend
+  const savings = avail * strat.save
   return {
     savings: Math.round(savings),
     flexible: Math.round(flexible),
-    dailyFlexible: Math.round(flexible / 30),
-    dailySavings: Math.round(savings / 30),
-    dailyFood: Math.round(food / 30),
+    dailyFlexible: Math.round(flexible / DEFAULT_MONTH_DAYS),
+    dailySavings: Math.round(savings / DEFAULT_MONTH_DAYS),
+    dailyFood: Math.round(flexible * FOOD_SPEND_PCT / DEFAULT_MONTH_DAYS),
   }
 }
 
-// ── Step 4: Calculating animation ────────────────────────────────────
-const calcRevealCount = ref(0)
-const calcError = ref('')
-const calcPhases = [
-  { title: 'Menghitung anggaran...', subtitle: 'Memproses gaji dan pengeluaran wajib' },
-  { title: 'Mengoptimasi alokasi...', subtitle: 'Menerapkan strategi ' + (s3.value.saving_type || 'menabung') },
-  { title: 'Menyiapkan rencana...', subtitle: 'Menghitung target harian per kategori' },
-  { title: 'Hampir selesai!', subtitle: 'Menyimpan rencana keuanganmu...' },
-]
-const calcPhaseIdx = ref(0)
-const calcPhase = computed(() => calcPhases[Math.min(calcPhaseIdx.value, calcPhases.length - 1)])
+function calcMidCycle(type: string) {
+  const strat = SAVING_TYPES[type] ?? SAVING_TYPES.recommendation
+  const net = Math.max(0, netBalance.value)
+  const days = daysToNextPayday.value
+  const flexible = net * strat.spend
+  const savings = net * strat.save
+  return {
+    savings: Math.round(savings),
+    flexible: Math.round(flexible),
+    dailyFlexible: Math.round(flexible / days),
+    dailyFood: Math.round(flexible * FOOD_SPEND_PCT / days),
+  }
+}
 
-const calcItems = computed(() => {
-  const c = calcFor(s3.value.saving_type || 'recommendation')
-  return [
-    { label: 'Penghasilan bulanan',    value: salaryValue.value,  color: 'text-white' },
-    { label: '- Pengeluaran wajib',    value: -totalMandatory.value, color: 'text-red-400' },
-    { label: '= Dana tersedia',        value: available.value,    color: 'text-emerald-400' },
-    { label: '📕 Target tabungan/bln', value: c.savings,          color: 'text-red-300' },
-    { label: '🟦 Budget fleksibel/bln',value: c.flexible,         color: 'text-cyan-400' },
-    { label: '🍜 Budget makan/hari',   value: c.dailyFood,        color: 'text-white' },
-    { label: '🎯 Budget harian total', value: c.dailyFlexible,    color: 'text-emerald-400' },
-  ]
+// ── Step indicator ────────────────────────────────────────────────────
+const totalIndicatorSteps = computed(() => isMidCycle.value ? 4 : 3)
+const indicatorStep = computed(() => {
+  if (step.value === 1) return 1
+  if (step.value === 2) return 2
+  if (step.value === 3) return isMidCycle.value ? 3 : 2
+  if (step.value === 4) return isMidCycle.value ? 4 : 3
+  return totalIndicatorSteps.value
 })
 
-// ── Final plan (shown in step 5) ──────────────────────────────────────
-const finalPlan = ref<any>({})
+// ── Step 5: Calculating animation ────────────────────────────────────
+const calcRevealCount = ref(0)
+const calcError = ref('')
+const calcPhaseIdx = ref(0)
+
+// ── Final plan (step 6) ───────────────────────────────────────────────
+const finalPlan = ref<FinalPlan>({
+  savings: 0,
+  flexible: 0,
+  dailySavings: 0,
+  dailyFlexible: 0,
+  breakdown: [],
+})
 
 async function startCalc() {
-  if (!s3.value.saving_type) return
-  step.value = 4
+  if (!s4.value.saving_type) return
+  step.value = 5
   calcRevealCount.value = 0
   calcPhaseIdx.value = 0
   calcError.value = ''
 
-  // Reveal items one by one
+  const calcPhasesLength = 4
+  const calcItemsLength = 7
+
   const revealInterval = setInterval(() => {
     calcRevealCount.value++
-    if (calcRevealCount.value >= calcItems.value.length) clearInterval(revealInterval)
+    if (calcRevealCount.value >= calcItemsLength) clearInterval(revealInterval)
   }, 420)
 
-  // Phase progression
   const phaseInterval = setInterval(() => {
     calcPhaseIdx.value++
-    if (calcPhaseIdx.value >= calcPhases.length - 1) clearInterval(phaseInterval)
+    if (calcPhaseIdx.value >= calcPhasesLength - 1) clearInterval(phaseInterval)
   }, 900)
 
-  // Give animation 2.8s head start then submit
   await sleep(2800)
 
   try {
-    // 1. Personal data
     await api.post('/personal-data/', {
       salary: salaryValue.value,
       purpose_of_join_here: purposeValue.value,
-      saving_type: s3.value.saving_type,
+      saving_type: s4.value.saving_type,
+      payday_day: s1.value.paydayDay,
     })
 
-    // 2. Mandatory expenses (batch, skip errors individually)
     const now = new Date()
     const txDate = now.toISOString()
     for (const item of mandatoryItems.value) {
@@ -537,42 +505,91 @@ async function startCalc() {
           amount: item.amount,
           description: item.description,
           transaction_date: txDate,
-          for_month: now.getMonth() + 1,
-          for_year: now.getFullYear(),
+          for_month: isMidCycle.value ? nextPaydayMonth.value : now.getMonth() + 1,
+          for_year: isMidCycle.value ? nextPaydayYear.value : now.getFullYear(),
         })
       } catch {}
     }
 
-    // 3. Budget plan
-    await api.post('/budget-plan/', {
-      for_month: now.getMonth() + 1,
-      for_year: now.getFullYear(),
-      saving_type: s3.value.saving_type,
-      region: s1.value.region,
-    })
+    const midCycleNet = Math.max(0, netBalance.value)
+    if (isMidCycle.value && midCycleSpansTwoMonths.value) {
+      const totalDays = daysToNextPayday.value
+      const daysCurrentMonth = daysRemainingCurrentMonth.value
+      const daysNextMonth = s1.value.paydayDay - 1
+      const balanceCurrentMonth = midCycleNet * daysCurrentMonth / totalDays
+      const balanceNextMonth = midCycleNet * daysNextMonth / totalDays
+
+      await api.post('/budget-plan/', {
+        for_month: now.getMonth() + 1,
+        for_year: now.getFullYear(),
+        saving_type: s2.value.strategy,
+        region: s1.value.region,
+        current_balance: balanceCurrentMonth,
+        days_remaining: daysCurrentMonth,
+        mandatory_already_paid: true,
+        pending_mandatory: totalPending.value,
+      })
+
+      await api.post('/budget-plan/', {
+        for_month: nextPaydayMonth.value,
+        for_year: nextPaydayYear.value,
+        saving_type: s2.value.strategy,
+        region: s1.value.region,
+        current_balance: balanceNextMonth,
+        days_remaining: daysNextMonth,
+        mandatory_already_paid: true,
+        pending_mandatory: 0,
+      })
+    } else {
+      await api.post('/budget-plan/', {
+        for_month: isMidCycle.value ? nextPaydayMonth.value : now.getMonth() + 1,
+        for_year: isMidCycle.value ? nextPaydayYear.value : now.getFullYear(),
+        saving_type: isMidCycle.value ? s2.value.strategy : s4.value.saving_type,
+        region: s1.value.region,
+        ...(isMidCycle.value ? {
+          current_balance: midCycleNet,
+          days_remaining: daysToNextPayday.value,
+          mandatory_already_paid: true,
+          pending_mandatory: totalPending.value,
+        } : {}),
+      })
+    }
 
     auth.hasPersonalData = true
 
-    // Build final plan for step 5
-    const c = calcFor(s3.value.saving_type)
-    finalPlan.value = {
-      savings: c.savings,
-      flexible: c.flexible,
-      dailySavings: c.dailySavings,
-      dailyFlexible: c.dailyFlexible,
-      breakdown: [
-        { icon: '🍜', label: 'Makanan',    daily: Math.round(c.flexible * 0.65 / 30), pct: 65, color: 'text-white',         barColor: 'bg-emerald-400' },
-        { icon: '🎮', label: 'Hiburan',    daily: Math.round(c.flexible * 0.35 * 0.20 / 30), pct: 7,  color: 'text-cyan-400',    barColor: 'bg-cyan-400' },
-        { icon: '🛍️', label: 'Belanja',   daily: Math.round(c.flexible * 0.35 * 0.17 / 30), pct: 6,  color: 'text-violet-400',  barColor: 'bg-violet-400' },
-        { icon: '📦', label: 'Lainnya',   daily: Math.round(c.flexible * 0.35 * 0.63 / 30), pct: 22, color: 'text-slate-300',   barColor: 'bg-slate-400' },
-      ],
+    if (isMidCycle.value) {
+      const mc = calcMidCycle(s2.value.strategy)
+      finalPlan.value = {
+        savings: mc.savings,
+        flexible: mc.flexible,
+        dailySavings: Math.round(mc.savings / daysToNextPayday.value),
+        dailyFlexible: mc.dailyFlexible,
+        breakdown: [
+          { icon: '🍜', label: 'Makanan',  daily: mc.dailyFood, pct: Math.round(FOOD_SPEND_PCT * 100), color: 'text-white',       barColor: 'bg-emerald-400' },
+          { icon: '🛍️', label: 'Lainnya', daily: Math.round(mc.flexible * LIFESTYLE_SPEND_PCT / daysToNextPayday.value), pct: Math.round(LIFESTYLE_SPEND_PCT * 100), color: 'text-cyan-400', barColor: 'bg-cyan-400' },
+        ],
+      }
+    } else {
+      const c = calcFor(s4.value.saving_type)
+      finalPlan.value = {
+        savings: c.savings,
+        flexible: c.flexible,
+        dailySavings: c.dailySavings,
+        dailyFlexible: c.dailyFlexible,
+        breakdown: [
+          { icon: '🍜', label: 'Makanan',  daily: Math.round(c.flexible * FOOD_SPEND_PCT / DEFAULT_MONTH_DAYS), pct: 65, color: 'text-white',        barColor: 'bg-emerald-400' },
+          { icon: '🎮', label: 'Hiburan',  daily: Math.round(c.flexible * LIFESTYLE_SPEND_PCT * 0.20 / DEFAULT_MONTH_DAYS), pct: 7,  color: 'text-cyan-400',   barColor: 'bg-cyan-400' },
+          { icon: '🛍️', label: 'Belanja', daily: Math.round(c.flexible * LIFESTYLE_SPEND_PCT * 0.17 / DEFAULT_MONTH_DAYS), pct: 6,  color: 'text-violet-400', barColor: 'bg-violet-400' },
+          { icon: '📦', label: 'Lainnya', daily: Math.round(c.flexible * LIFESTYLE_SPEND_PCT * 0.63 / DEFAULT_MONTH_DAYS), pct: 22, color: 'text-slate-300',  barColor: 'bg-slate-400' },
+        ],
+      }
     }
 
     await sleep(600)
-    step.value = 5
+    step.value = 6
   } catch (e: any) {
     calcError.value = e.response?.data?.errors ?? e.response?.data?.message ?? 'Gagal menyimpan. Coba lagi.'
-    step.value = 3
+    step.value = 4
   }
 }
 
@@ -580,7 +597,6 @@ function finish() {
   router.push('/app')
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────
 function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)) }
 
 function fmtCur(val: number) {
