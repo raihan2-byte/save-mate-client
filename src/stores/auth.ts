@@ -30,8 +30,11 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       await api.get('/personal-data/')
       hasPersonalData.value = true
-    } catch {
-      hasPersonalData.value = false
+    } catch (e: any) {
+      if (e?.response?.status === 404) {
+        hasPersonalData.value = false
+      }
+      // non-404 (auth error, server error) — leave hasPersonalData as-is
     }
   }
 

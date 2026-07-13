@@ -4,7 +4,7 @@
     <div class="flex items-center justify-between mb-6">
       <div>
         <h1 class="text-2xl font-black text-white">Pengaturan Keuangan</h1>
-        <p class="text-slate-500 text-sm mt-0.5">Edit data & hitung ulang budget kapan saja</p>
+        <p class="text-slate-500 text-sm mt-0.5">{{ canEditFinancials ? 'Edit data & hitung ulang budget' : `Hanya bisa diedit saat gajian (tgl ${paydayDay})` }}</p>
       </div>
       <div v-if="isDirty" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
         <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
@@ -18,15 +18,122 @@
 
     <template v-else>
 
-      <!-- ─── Soft warning (ada transaksi) ────────────────── -->
-      <div v-if="hasTransactions && !editingPersonal"
-        class="flex items-start gap-3 p-4 mb-4 rounded-2xl border border-blue-500/20 bg-blue-500/5">
-        <span class="text-lg flex-shrink-0">ℹ️</span>
-        <div>
-          <p class="font-semibold text-blue-300 text-sm">Kamu sudah punya transaksi bulan ini</p>
-          <p class="text-slate-400 text-xs mt-0.5">Edit tetap bisa dilakukan. Setelah simpan, budget akan dihitung ulang otomatis. Transaksi yang sudah dicatat <span class="text-white font-medium">tidak akan terhapus</span> — hanya alokasi ke depan yang menyesuaikan.</p>
+      <!-- ─── Edit locked: bukan hari gajian ─────────────── -->
+      <div v-if="!canEditFinancials"
+        class="flex items-start gap-3 p-4 mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/5">
+        <span class="text-xl flex-shrink-0">🔒</span>
+        <div class="flex-1">
+          <p class="font-semibold text-amber-300 text-sm">Edit hanya bisa dilakukan saat gajian (tgl {{ paydayDay }})</p>
+          <p class="text-slate-400 text-xs mt-1">Mau set gaji bulan depan? Isi di bagian bawah. Atau kalau ada pemasukan tambahan sekarang, bisa langsung masukkan.</p>
+          <RouterLink to="/app/income"
+            class="inline-flex items-center gap-1.5 mt-2.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-xs font-semibold hover:bg-emerald-500/25 transition-colors">
+            💰 Tambah Pemasukan
+          </RouterLink>
         </div>
       </div>
+
+      <!-- ─── Gaji Bulan Depan (selalu visible jika ada budget plan) ─── -->
+      <section v-if="budgetPlan" class="glass-card p-5 mb-4">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-lg">📅</span>
+          <h2 class="font-bold text-white">Gaji Bulan Depan</h2>
+        </div>
+
+        <!-- Reminder jika sudah diset -->
+        <div v-if="nextSalary && nextSalary > 0"
+          :class="nextSalary > personalFormData.salary
+            ? 'bg-emerald-500/10 border-emerald-500/25'
+            : 'bg-orange-500/10 border-orange-500/25'"
+          class="flex items-start gap-3 p-3 mb-4 rounded-xl border">
+          <span class="flex-shrink-0">{{ nextSalary > personalFormData.salary ? '📈' : '📉' }}</span>
+          <div>
+            <p :class="nextSalary > personalFormData.salary ? 'text-emerald-300' : 'text-orange-300'"
+              class="text-sm font-semibold">
+              {{ nextSalary > personalFormData.salary ? 'Naik' : 'Turun' }} ke {{ fmtCur(nextSalary) }} mulai gajian tgl {{ paydayDay }}
+            </p>
+            <p class="text-slate-400 text-xs mt-0.5">
+              Dari {{ fmtCur(personalFormData.salary) }} →
+              <span :class="nextSalary > personalFormData.salary ? 'text-emerald-400' : 'text-orange-400'" class="font-semibold">
+                {{ nextSalary > personalFormData.salary ? '+' : '' }}{{ fmtCur(nextSalary - personalFormData.salary) }}
+              </span>
+              · Berlaku otomatis saat siklus berikutnya dimulai.
+            </p>
+          </div>
+        </div>
+
+        <p class="text-slate-400 text-xs mb-3">Gaji kamu bulan depan berapa? Masukkan totalnya — berlaku otomatis mulai gajian tgl {{ paydayDay }}.</p>
+
+        <div class="flex gap-2">
+          <div class="flex-1 relative">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">Rp</span>
+            <input
+              v-model="nextSalaryDisplay"
+              @input="formatNextSalaryInput"
+              type="text"
+              inputmode="numeric"
+              placeholder="0"
+              class="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-emerald-500/50 placeholder:text-slate-600"
+            />
+          </div>
+          <AppButton
+            variant="primary"
+            size="sm"
+            :loading="savingNextSalary"
+            @click="saveNextSalary"
+            :disabled="nextSalaryNumeric <= 0 || nextSalaryNumeric === personalFormData.salary"
+          >
+            Simpan
+          </AppButton>
+          <AppButton
+            v-if="nextSalary && nextSalary > 0"
+            variant="danger"
+            size="sm"
+            :loading="clearingNextSalary"
+            @click="clearNextSalary"
+          >
+            Hapus
+          </AppButton>
+        </div>
+        <p v-if="nextSalaryError" class="text-red-400 text-xs mt-2">{{ nextSalaryError }}</p>
+
+        <!-- Preview budget bulan depan -->
+        <template v-if="nextSalaryNumeric > totalMandatory">
+          <div class="mt-4 border-t border-white/10 pt-4">
+            <p class="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-3">
+              Preview Budget Bulan Depan
+              <span v-if="nextSalaryNumeric > personalFormData.salary" class="text-emerald-400 normal-case ml-1">↑ Naik gaji</span>
+              <span v-else-if="nextSalaryNumeric < personalFormData.salary" class="text-orange-400 normal-case ml-1">↓ Turun gaji</span>
+            </p>
+            <div class="grid grid-cols-2 gap-2 text-center">
+              <div class="bg-white/5 rounded-xl p-3">
+                <p class="text-slate-500 text-[10px] mb-1">Budget/hari</p>
+                <p class="text-white font-black text-base">{{ fmtShort(nextBudgetPreview!.dailyBudget) }}</p>
+              </div>
+              <div class="bg-white/5 rounded-xl p-3">
+                <p class="text-slate-500 text-[10px] mb-1">Tabungan/hari</p>
+                <p class="text-emerald-300 font-black text-base">{{ fmtShort(nextBudgetPreview!.dailySavings) }}</p>
+              </div>
+              <div class="bg-white/5 rounded-xl p-3">
+                <p class="text-slate-500 text-[10px] mb-1">Makan/bulan</p>
+                <p class="text-white font-bold text-sm">{{ fmtShort(nextBudgetPreview!.foodAmount) }}</p>
+              </div>
+              <div class="bg-white/5 rounded-xl p-3">
+                <p class="text-slate-500 text-[10px] mb-1">Lifestyle/bulan</p>
+                <p class="text-white font-bold text-sm">{{ fmtShort(nextBudgetPreview!.lifestyleAmount) }}</p>
+              </div>
+            </div>
+            <div class="flex justify-between text-xs text-slate-500 mt-2 px-1">
+              <span>Tabungan/bulan: {{ fmtShort(nextBudgetPreview!.savingsAmount) }}</span>
+              <span>Wajib/bulan: {{ fmtShort(totalMandatory) }}</span>
+            </div>
+          </div>
+        </template>
+        <div v-else-if="nextSalaryNumeric > 0 && nextSalaryNumeric <= totalMandatory"
+          class="mt-3 flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+          <span>🚫</span>
+          <p class="text-red-300 text-xs">Gaji lebih kecil dari pengeluaran wajib ({{ fmtCur(totalMandatory) }})</p>
+        </div>
+      </section>
 
       <!-- ─── Data Keuangan ─────────────────────────────── -->
       <section class="glass-card p-5 mb-4">
@@ -35,103 +142,44 @@
             <span class="text-lg">💼</span>
             <h2 class="font-bold text-white">Data Keuangan</h2>
           </div>
-          <button @click="toggleEdit"
-            class="text-xs px-3 py-1.5 rounded-lg border transition-all"
-            :class="editingPersonal
-              ? 'border-red-500/30 bg-red-500/10 text-red-400'
-              : 'border-white/10 bg-white/5 text-slate-400 hover:text-white'">
+          <AppButton
+            v-if="canEditFinancials"
+            :variant="editingPersonal ? 'danger' : 'outline'"
+            size="sm"
+            @click="toggleEdit"
+          >
             {{ editingPersonal ? '✕ Batal' : '✏️ Edit' }}
-          </button>
+          </AppButton>
         </div>
 
-        <!-- View mode -->
-        <div v-if="!editingPersonal" class="space-y-3">
-          <div class="flex justify-between items-center py-2 border-b border-white/5">
-            <span class="text-slate-400 text-sm">Penghasilan Bulanan</span>
-            <span class="font-bold text-emerald-400">{{ fmtCur(personalForm.salary) }}</span>
-          </div>
-          <div class="flex justify-between items-center py-2 border-b border-white/5">
-            <span class="text-slate-400 text-sm">Gaya Menabung</span>
-            <span class="font-semibold text-white">{{ savingLabels[personalForm.saving_type] ?? personalForm.saving_type }}</span>
-          </div>
-          <div class="flex justify-between items-center py-2">
-            <span class="text-slate-400 text-sm">Tujuan</span>
-            <span class="font-medium text-white text-sm text-right max-w-[60%]">{{ personalForm.purpose_of_join_here }}</span>
-          </div>
-        </div>
+        <PersonalDataForm
+          v-model="personalFormData"
+          :editing="editingPersonal"
+          :saving="savingPersonal"
+          v-model:salaryDisplay="salaryDisplay"
+          :validationError="personalError"
+          @save="savePersonal"
+        />
 
-        <!-- Edit mode -->
-        <div v-else class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-slate-300 mb-1.5">Penghasilan Bulanan (Rp)</label>
-            <div class="relative">
-              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">Rp</span>
-              <input v-model="salaryDisplay" type="text" inputmode="numeric" class="input-dark pl-10" placeholder="5.000.000" />
-            </div>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-slate-300 mb-2">Gaya Menabung</label>
-            <div class="grid grid-cols-3 gap-2">
-              <button v-for="opt in savingOptions" :key="opt.value" type="button"
-                @click="personalForm.saving_type = opt.value"
-                class="py-2 px-2 rounded-xl border text-xs font-semibold transition-all"
-                :class="personalForm.saving_type === opt.value
-                  ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300'
-                  : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'">
-                {{ opt.icon }} {{ opt.label }}
-              </button>
-            </div>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-slate-300 mb-1.5">Tujuan</label>
-            <input v-model="personalForm.purpose_of_join_here" type="text" maxlength="50" class="input-dark" />
-          </div>
+        <!-- Live preview (edit mode only) -->
+        <BudgetPreviewCard
+          v-if="editingPersonal && salaryNumeric > 0 && salaryNumeric > totalMandatory"
+          class="mt-4"
+          :salary="salaryNumeric"
+          :mandatory="totalMandatory"
+          :savingType="personalFormData.savingType"
+          :daysInMonth="daysInMonth"
+          :originalSalary="originalPersonal.salary"
+          :originalSavingType="originalPersonal.savingType"
+        />
 
-          <!-- Negative salary warning -->
-          <div v-if="salaryNumeric > 0 && salaryNumeric <= totalMandatory"
-            class="flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/25">
-            <span class="text-base flex-shrink-0">🚫</span>
-            <p class="text-red-300 text-xs">Gaji lebih kecil dari total pengeluaran wajib ({{ fmtCur(totalMandatory) }}). Budget tidak bisa dihitung — kurangi pengeluaran wajib atau naikkan gaji.</p>
-          </div>
-
-          <!-- Live preview -->
-          <div v-if="preview" class="rounded-2xl border p-4 space-y-3"
-            :class="preview.dailyBudgetDiff >= 0 ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-red-500/20 bg-red-500/5'">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-sm">🔮</span>
-              <p class="text-xs font-bold uppercase tracking-widest"
-                :class="preview.dailyBudgetDiff >= 0 ? 'text-emerald-400' : 'text-red-400'">
-                Preview Budget Baru
-              </p>
-            </div>
-            <div class="grid grid-cols-2 gap-2 text-xs">
-              <div class="bg-white/5 rounded-xl p-2.5 text-center">
-                <p class="text-slate-400 mb-1">Budget/hari</p>
-                <p class="font-black text-white text-base">{{ fmtShort(preview.dailyBudget) }}</p>
-                <p class="mt-0.5 font-semibold"
-                  :class="preview.dailyBudgetDiff >= 0 ? 'text-emerald-400' : 'text-red-400'">
-                  {{ preview.dailyBudgetDiff >= 0 ? '▲' : '▼' }} {{ fmtShort(Math.abs(preview.dailyBudgetDiff)) }}
-                </p>
-              </div>
-              <div class="bg-white/5 rounded-xl p-2.5 text-center">
-                <p class="text-slate-400 mb-1">Tabungan/bulan</p>
-                <p class="font-black text-white text-base">{{ fmtShort(preview.savings) }}</p>
-                <p class="mt-0.5 font-semibold"
-                  :class="preview.savingsDiff >= 0 ? 'text-emerald-400' : 'text-red-400'">
-                  {{ preview.savingsDiff >= 0 ? '▲' : '▼' }} {{ fmtShort(Math.abs(preview.savingsDiff)) }}
-                </p>
-              </div>
-            </div>
-            <p v-if="preview.dailyBudgetDiff < 0" class="text-xs text-amber-300">
-              ⚠️ Budget harian turun karena persentase tabungan lebih tinggi di mode {{ savingLabels[personalForm.saving_type] }}.
-            </p>
-          </div>
-
-          <button @click="savePersonal" :disabled="savingPersonal"
-            class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-semibold text-sm transition-all disabled:opacity-50">
-            {{ savingPersonal ? 'Menyimpan & menghitung ulang...' : '💾 Simpan & Hitung Ulang Budget' }}
-          </button>
-          <p v-if="personalError" class="text-red-400 text-xs">{{ personalError }}</p>
+        <!-- Salary too low warning -->
+        <div
+          v-if="editingPersonal && salaryNumeric > 0 && salaryNumeric <= totalMandatory"
+          class="mt-4 flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/25"
+        >
+          <span class="text-base flex-shrink-0">🚫</span>
+          <p class="text-red-300 text-xs">Gaji lebih kecil dari total pengeluaran wajib ({{ fmtCur(totalMandatory) }}). Budget tidak bisa dihitung — kurangi pengeluaran wajib atau naikkan gaji.</p>
         </div>
       </section>
 
@@ -142,67 +190,22 @@
             <span class="text-lg">🏠</span>
             <h2 class="font-bold text-white">Pengeluaran Wajib</h2>
           </div>
-          <button @click="showAddExpense = !showAddExpense"
-            class="text-xs px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all">
+          <AppButton variant="outline" size="sm" @click="showAddExpense = !showAddExpense">
             ＋ Tambah
-          </button>
+          </AppButton>
         </div>
 
-        <!-- Add form -->
-        <div v-if="showAddExpense" class="bg-white/3 border border-white/10 rounded-2xl p-4 mb-4 space-y-3">
-          <div class="grid grid-cols-3 gap-1.5">
-            <button v-for="cat in mandatoryCategories" :key="cat.value" type="button"
-              @click="addForm.category = cat.value"
-              class="py-2 px-1 rounded-xl border text-center text-xs transition-all"
-              :class="addForm.category === cat.value
-                ? 'border-emerald-500 bg-emerald-500/10 text-emerald-300'
-                : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20'">
-              {{ cat.icon }} {{ cat.label }}
-            </button>
-          </div>
-          <div class="relative">
-            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">Rp</span>
-            <input v-model="addAmountDisplay" type="text" inputmode="numeric" class="input-dark pl-10" placeholder="0" />
-          </div>
-          <input v-model="addForm.description" type="text" class="input-dark" placeholder="Kost, ojek, WiFi..." maxlength="100" />
-          <p v-if="addWouldExceed" class="text-red-400 text-xs">
-            🚫 Akan melebihi gaji. Sisa yang bisa dialokasikan: {{ fmtCur(personalForm.salary - totalMandatory) }}
-          </p>
-          <div class="flex gap-2">
-            <button @click="showAddExpense = false" class="btn-secondary flex-1 text-sm">Batal</button>
-            <button @click="addMandatory" :disabled="!addFormValid || addingExpense"
-              class="flex-1 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-semibold text-sm transition-all disabled:opacity-50">
-              {{ addingExpense ? '...' : 'Tambah' }}
-            </button>
-          </div>
-        </div>
-
-        <!-- List -->
-        <div v-if="mandatoryLoading" class="space-y-2">
-          <div v-for="i in 3" :key="i" class="h-12 rounded-xl bg-white/5 animate-pulse" />
-        </div>
-        <div v-else-if="expenses.length === 0" class="text-center py-6 text-slate-500 text-sm">
-          Belum ada pengeluaran wajib
-        </div>
-        <div v-else class="space-y-2">
-          <div v-for="item in expenses" :key="item.mandatory_expenditure_id"
-            class="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 transition-colors group">
-            <span class="text-xl flex-shrink-0">{{ catMeta[item.category]?.icon ?? '📦' }}</span>
-            <div class="flex-1 min-w-0">
-              <p class="text-white text-sm font-medium truncate">{{ item.description }}</p>
-              <p class="text-slate-500 text-xs">{{ catMeta[item.category]?.label }}</p>
-            </div>
-            <span class="font-bold text-sm tabular-nums text-red-400 flex-shrink-0">{{ fmtCur(item.amount) }}</span>
-            <button @click="deleteMandatory(item.mandatory_expenditure_id)"
-              class="opacity-0 group-hover:opacity-100 transition-opacity ml-1 text-slate-600 hover:text-red-400">
-              🗑️
-            </button>
-          </div>
-          <div class="flex justify-between items-center pt-3 mt-2 border-t border-white/10">
-            <span class="text-slate-400 text-sm font-medium">Total Wajib</span>
-            <span class="font-black text-white">{{ fmtCur(totalMandatory) }}</span>
-          </div>
-        </div>
+        <MandatoryExpenseList
+          :items="allExpenses"
+          :loading="mandatoryLoading"
+          :adding="addingExpense"
+          :salary="personalFormData.salary"
+          :next-month="nextMonthNum"
+          :next-year="nextYearNum"
+          v-model:showAdd="showAddExpense"
+          @add="addMandatory"
+          @delete="deleteMandatory"
+        />
       </section>
 
       <!-- ─── Recalculate button ─────────────────────────── -->
@@ -215,11 +218,9 @@
               <p class="text-slate-400 text-sm mt-0.5">Perubahan data keuanganmu mempengaruhi alokasi budget harian.</p>
             </div>
           </div>
-          <button @click="recalculate" :disabled="recalculating"
-            class="w-full py-3.5 rounded-2xl font-black text-white transition-all disabled:opacity-50"
-            style="background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 0 30px rgba(16,185,129,0.3)">
+          <AppButton variant="primary" size="lg" class="w-full" :loading="recalculating" @click="recalculate">
             {{ recalculating ? '⏳ Menghitung ulang...' : '🔄 Hitung Ulang Budget' }}
-          </button>
+          </AppButton>
         </div>
       </Transition>
 
@@ -227,11 +228,10 @@
       <section v-if="budgetPlan && !isDirty" class="glass-card p-5">
         <div class="flex items-center gap-2 mb-4">
           <span class="text-lg">📊</span>
-          <h2 class="font-bold text-white">Budget Aktif Bulan Ini</h2>
+          <h2 class="font-bold text-white">Budget Aktif {{ (budgetPlan.mid_cycle_days ?? 0) > 0 ? 'Periode Ini' : 'Bulan Ini' }}</h2>
           <span class="ml-auto text-xs text-slate-500">{{ monthLabel }}</span>
         </div>
 
-        <!-- Skeleton saat recalculate -->
         <template v-if="budgetRefreshing">
           <div class="grid grid-cols-2 gap-3 mb-3">
             <div class="h-16 rounded-2xl bg-white/5 animate-pulse" />
@@ -256,14 +256,14 @@
           <div class="space-y-2 text-sm">
             <div class="flex justify-between py-1.5 border-b border-white/5">
               <span class="text-slate-400">🍜 Makan/hari</span>
-              <span class="font-semibold text-white">{{ fmtShort((budgetPlan.food_amount ?? 0) / new Date(now.getFullYear(), now.getMonth()+1, 0).getDate()) }}</span>
+              <span class="font-semibold text-white">{{ fmtShort((budgetPlan.food_amount ?? 0) / ((budgetPlan.mid_cycle_days ?? 0) > 0 ? (budgetPlan.mid_cycle_days ?? daysInMonth) : daysInMonth)) }}</span>
             </div>
             <div class="flex justify-between py-1.5 border-b border-white/5">
-              <span class="text-slate-400">💰 Tabungan/bulan</span>
+              <span class="text-slate-400">💰 Tabungan/{{ (budgetPlan.mid_cycle_days ?? 0) > 0 ? 'periode' : 'bulan' }}</span>
               <span class="font-bold text-emerald-400">{{ fmtCur(budgetPlan.savings_amount ?? 0) }}</span>
             </div>
             <div class="flex justify-between py-1.5">
-              <span class="text-slate-400">⚙️ Wajib/bulan</span>
+              <span class="text-slate-400">⚙️ Wajib/{{ (budgetPlan.mid_cycle_days ?? 0) > 0 ? 'periode' : 'bulan' }}</span>
               <span class="font-semibold text-slate-300">{{ fmtCur(budgetPlan.total_mandatory ?? 0) }}</span>
             </div>
           </div>
@@ -274,10 +274,12 @@
 
     <!-- Toast notification -->
     <Transition name="toast">
-      <div v-if="toast" class="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl text-sm font-semibold shadow-xl flex items-center gap-2 whitespace-nowrap"
+      <div v-if="toast"
+        class="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-2xl text-sm font-semibold shadow-xl flex items-center gap-2 whitespace-nowrap"
         :class="toast.type === 'success'
           ? 'bg-emerald-500/90 text-white backdrop-blur-md'
-          : 'bg-red-500/90 text-white backdrop-blur-md'">
+          : 'bg-red-500/90 text-white backdrop-blur-md'"
+      >
         <span>{{ toast.type === 'success' ? '✓' : '✕' }}</span>
         {{ toast.message }}
       </div>
@@ -285,8 +287,9 @@
 
     <!-- Recalculate overlay -->
     <Transition name="fade">
-      <div v-if="recalculating" class="fixed inset-0 z-50 flex items-center justify-center"
-        style="background: rgba(2,6,23,0.85); backdrop-filter: blur(12px)">
+      <div v-if="recalculating"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xl"
+      >
         <div class="text-center">
           <div class="relative w-20 h-20 mx-auto mb-6">
             <div class="absolute inset-0 rounded-full border-4 border-emerald-500/20" />
@@ -303,12 +306,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import api from '@/api'
-import { useCurrencyInput } from '@/composables/useCurrencyInput'
+import AppButton from '@/components/ui/AppButton.vue'
+import PersonalDataForm, { type PersonalDataFormData } from '@/components/settings/PersonalDataForm.vue'
+import MandatoryExpenseList, { type MandatoryExpenditure } from '@/components/settings/MandatoryExpenseList.vue'
+import BudgetPreviewCard from '@/components/settings/BudgetPreviewCard.vue'
+import type { BudgetPlan } from '@/types'
+import { calcBudgetPreview } from '@/constants/budgetConfig'
+import { formatCurrency, formatCurrencyShort } from '@/utils/formatting'
+import { usePersonalDataStore } from '@/stores/personalData'
 
-const { displayValue: salaryDisplay, numericValue: salaryNumeric } = useCurrencyInput()
-const { displayValue: addAmountDisplay, numericValue: addAmountValue, reset: resetAddAmount } = useCurrencyInput()
+// ── State ─────────────────────────────────────────────────────────────────────
 
 const loading = ref(true)
 const mandatoryLoading = ref(false)
@@ -317,6 +326,9 @@ const editingPersonal = ref(false)
 const hasTransactions = ref(false)
 const savingPersonal = ref(false)
 const personalError = ref('')
+const savingNextSalary = ref(false)
+const clearingNextSalary = ref(false)
+const nextSalaryError = ref('')
 const showAddExpense = ref(false)
 const addingExpense = ref(false)
 const recalculating = ref(false)
@@ -325,96 +337,138 @@ const budgetRefreshing = ref(false)
 const toast = ref<{ message: string; type: 'success' | 'error' } | null>(null)
 let toastTimer: ReturnType<typeof setTimeout> | null = null
 
+// ── Data ──────────────────────────────────────────────────────────────────────
+
+const personalFormData = ref<PersonalDataFormData>({ salary: 0, savingType: '', purpose: '' })
+const originalPersonal = ref<{ salary: number; savingType: string }>({ salary: 0, savingType: '' })
+const salaryDisplay = ref('')
+const nextSalary = ref<number | null>(null)
+const nextSalaryDisplay = ref('')
+const nextSalaryNumeric = computed(() => {
+  const raw = nextSalaryDisplay.value.replace(/\./g, '')
+  return raw ? Number(raw) : 0
+})
+
+const salaryNumeric = computed(() => {
+  const raw = salaryDisplay.value.replace(/\./g, '')
+  return raw ? Number(raw) : 0
+})
+
+const expenses = ref<MandatoryExpenditure[]>([])
+const nextCycleExpenses = ref<MandatoryExpenditure[]>([])
+const budgetPlan = ref<BudgetPlan | null>(null)
+const paydayDay = ref(1)
+
+const now = new Date()
+const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+
+// next month info — dideklarasikan setelah `now`
+const _nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+const nextMonthNum = _nextMonthDate.getMonth() + 1
+const nextYearNum = _nextMonthDate.getFullYear()
+
+const nextMonthDays = computed(() => {
+  const d = new Date(now.getFullYear(), now.getMonth() + 2, 0)
+  return d.getDate()
+})
+
+const nextBudgetPreview = computed(() => {
+  if (nextSalaryNumeric.value <= 0) return null
+  const st = personalFormData.value.savingType
+  const allMandatory = [...(expenses.value ?? []), ...(nextCycleExpenses.value ?? [])].reduce((s, e) => s + (e.amount ?? 0), 0)
+  return calcBudgetPreview(nextSalaryNumeric.value, allMandatory, st, nextMonthDays.value)
+})
+
+// Edit finansial hanya boleh saat: belum ada budget plan (onboarding) ATAU hari ini = hari gajian
+const canEditFinancials = computed(() => {
+  if (!budgetPlan.value) return true        // belum ada plan = masih setup awal
+  return now.getDate() === paydayDay.value  // hari gajian
+})
+
+// ── Computed ──────────────────────────────────────────────────────────────────
+
+const totalMandatory = computed(() => expenses.value.reduce((s, e) => s + (e.amount ?? 0), 0))
+const allExpenses = computed(() => [...(expenses.value ?? []), ...(nextCycleExpenses.value ?? [])])
+
+const monthLabel = computed(() => {
+  const b = budgetPlan.value
+  if (!b) return now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+  const fmt = (d: Date) => d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+  const month = (b.for_month as number) - 1
+  const year = b.for_year as number
+  if ((b.mid_cycle_days as number) > 0) {
+    const startDate = new Date(b.created_at as string)
+    startDate.setHours(0, 0, 0, 0)
+    const pd = paydayDay.value
+    let endDate = new Date(year, month, pd - 1)
+    if (endDate < startDate) endDate = new Date(year, month + 1, pd - 1)
+    return `${fmt(startDate)} – ${fmt(endDate)}`
+  }
+  const cycleStart = new Date(year, month, paydayDay.value)
+  const cycleEnd = new Date(year, month + 1, paydayDay.value)
+  return `${fmt(cycleStart)} – ${fmt(cycleEnd)}`
+})
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const fmtCur = formatCurrency
+const fmtShort = formatCurrencyShort
+
 function showToast(message: string, type: 'success' | 'error' = 'success') {
   if (toastTimer) clearTimeout(toastTimer)
   toast.value = { message, type }
   toastTimer = setTimeout(() => { toast.value = null }, 3500)
 }
 
-const personalForm = ref({ salary: 0, saving_type: '', purpose_of_join_here: '', region: '' })
-const addForm = ref({ category: '', description: '' })
-const expenses = ref<any[]>([])
-const budgetPlan = ref<any>(null)
-
-const now = new Date()
-const monthLabel = now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
-const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-
-const savingOptions = [
-  { value: 'frugal',         icon: '🧊', label: 'Frugal' },
-  { value: 'recommendation', icon: '✅', label: 'Rekomendasi' },
-  { value: 'normal',         icon: '😊', label: 'Normal' },
-]
-const savingLabels: Record<string, string> = {
-  frugal: '🧊 Frugal',
-  recommendation: '✅ Rekomendasi',
-  normal: '😊 Normal',
-}
-const spendPct: Record<string, number> = { frugal: 0.35, recommendation: 0.55, normal: 0.75 }
-
-const mandatoryCategories = [
-  { value: 'housing',      icon: '🏠', label: 'Kost/Sewa' },
-  { value: 'transport',    icon: '🚗', label: 'Transport' },
-  { value: 'utilities',    icon: '📱', label: 'Utilitas' },
-  { value: 'subscription', icon: '💳', label: 'Langganan' },
-  { value: 'other',        icon: '📦', label: 'Lainnya' },
-]
-const catMeta: Record<string, { icon: string; label: string }> = Object.fromEntries(
-  mandatoryCategories.map(c => [c.value, { icon: c.icon, label: c.label }])
-)
-
-const totalMandatory = computed(() => expenses.value.reduce((s, e) => s + (e.amount ?? 0), 0))
-const addFormValid = computed(() =>
-  addForm.value.category &&
-  addAmountValue.value > 0 &&
-  addForm.value.description.trim().length >= 3 &&
-  (totalMandatory.value + addAmountValue.value) < personalForm.value.salary
-)
-const addWouldExceed = computed(() =>
-  addAmountValue.value > 0 && (totalMandatory.value + addAmountValue.value) >= personalForm.value.salary
-)
-
-// Live preview when editing
-const preview = computed(() => {
-  if (!editingPersonal.value) return null
-  const newSalary = salaryNumeric.value
-  const type = personalForm.value.saving_type
-  if (!newSalary || !type) return null
-
-  const available = newSalary - totalMandatory.value
-  if (available <= 0) return null
-  const spend = spendPct[type] ?? 0.55
-  const newDailyBudget = (available * spend) / daysInMonth
-  const newSavings = available * (1 - spend)
-
-  const oldDailyBudget = budgetPlan.value?.daily_budget ?? 0
-  const oldSavings = budgetPlan.value?.savings_amount ?? 0
-
-  return {
-    dailyBudget: newDailyBudget,
-    savings: newSavings,
-    dailyBudgetDiff: newDailyBudget - oldDailyBudget,
-    savingsDiff: newSavings - oldSavings,
-  }
-})
-
-function fmtCur(val: number) {
-  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val)
-}
-function fmtShort(val: number) {
-  if (val >= 1_000_000) return 'Rp ' + (val / 1_000_000).toFixed(1).replace('.0', '') + 'jt'
-  if (val >= 1_000) return 'Rp ' + Math.round(val / 1_000) + 'rb'
-  return 'Rp ' + Math.round(val)
-}
-
-watch(salaryNumeric, v => { personalForm.value.salary = v })
-
 function toggleEdit() {
   editingPersonal.value = !editingPersonal.value
-  if (editingPersonal.value && personalForm.value.salary > 0) {
-    salaryDisplay.value = String(Math.round(personalForm.value.salary)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+  if (editingPersonal.value && personalFormData.value.salary > 0) {
+    salaryDisplay.value = String(Math.round(personalFormData.value.salary)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+    originalPersonal.value = { salary: personalFormData.value.salary, savingType: personalFormData.value.savingType }
   }
 }
+
+function formatNextSalaryInput() {
+  const raw = nextSalaryDisplay.value.replace(/\D/g, '')
+  nextSalaryDisplay.value = raw ? Number(raw).toLocaleString('id-ID') : ''
+}
+
+async function saveNextSalary() {
+  nextSalaryError.value = ''
+  if (nextSalaryNumeric.value <= 0) return
+  if (nextSalaryNumeric.value === personalFormData.value.salary) {
+    nextSalaryError.value = `Gaji yang dimasukkan (${fmtCur(nextSalaryNumeric.value)}) sama dengan gaji sekarang — tidak ada perubahan.`
+    return
+  }
+  savingNextSalary.value = true
+  try {
+    await api.patch('/personal-data/next-salary', { next_salary: nextSalaryNumeric.value })
+    nextSalary.value = nextSalaryNumeric.value
+    showToast(`Gaji baru ${fmtCur(nextSalaryNumeric.value)} akan aktif mulai gajian tgl ${paydayDay.value}`)
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { errors?: string; message?: string } } }
+    nextSalaryError.value = err.response?.data?.errors ?? err.response?.data?.message ?? 'Gagal menyimpan'
+  } finally {
+    savingNextSalary.value = false
+  }
+}
+
+async function clearNextSalary() {
+  clearingNextSalary.value = true
+  try {
+    await api.delete('/personal-data/next-salary')
+    nextSalary.value = null
+    nextSalaryDisplay.value = ''
+    showToast('Gaji bulan depan dihapus')
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { errors?: string; message?: string } } }
+    nextSalaryError.value = err.response?.data?.errors ?? err.response?.data?.message ?? 'Gagal menghapus'
+  } finally {
+    clearingNextSalary.value = false
+  }
+}
+
+// ── API Calls ─────────────────────────────────────────────────────────────────
 
 async function loadAll() {
   loading.value = true
@@ -427,14 +481,18 @@ async function loadAll() {
 
     if (pdRes.status === 'fulfilled') {
       const pd = pdRes.value.data.data
-      personalForm.value = {
+      paydayDay.value = pd.payday_day ?? 1
+      personalFormData.value = {
         salary: pd.salary ?? 0,
-        saving_type: pd.saving_type ?? '',
-        purpose_of_join_here: pd.purpose_of_join_here ?? '',
-        region: '',
+        savingType: pd.saving_type ?? '',
+        purpose: pd.purpose_of_join_here ?? '',
       }
       if (pd.salary > 0) {
         salaryDisplay.value = String(Math.round(pd.salary)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+      }
+      nextSalary.value = pd.next_salary ?? null
+      if (nextSalary.value && nextSalary.value > 0) {
+        nextSalaryDisplay.value = String(Math.round(nextSalary.value)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
       }
     }
 
@@ -442,7 +500,6 @@ async function loadAll() {
       budgetPlan.value = bpRes.value.data.data
     }
 
-    // Check if there are transactions this month
     if (summaryRes.status === 'fulfilled') {
       const s = summaryRes.value.data.data
       if (((s?.total_food_spent ?? 0) + (s?.total_lifestyle_spent ?? 0)) > 0) {
@@ -470,11 +527,20 @@ async function loadExpenses() {
   try {
     const res = await api.get(`/mandatory-expenditure/month/${now.getMonth() + 1}/${now.getFullYear()}`)
     const raw = res.data.data
-    expenses.value = (raw?.data ?? raw ?? [])
+    const list = raw?.data ?? raw
+    expenses.value = Array.isArray(list) ? list as MandatoryExpenditure[] : []
   } catch {
     expenses.value = []
   } finally {
     mandatoryLoading.value = false
+  }
+  try {
+    const res = await api.get(`/mandatory-expenditure/month/${nextMonthNum}/${nextYearNum}`)
+    const raw = res.data.data
+    const list = raw?.data ?? raw
+    nextCycleExpenses.value = Array.isArray(list) ? list as MandatoryExpenditure[] : []
+  } catch {
+    nextCycleExpenses.value = []
   }
 }
 
@@ -488,28 +554,27 @@ async function savePersonal() {
     return
   }
   try {
-    personalForm.value.salary = newSalary
+    personalFormData.value.salary = newSalary
     await api.put('/personal-data/', {
-      salary: personalForm.value.salary,
-      saving_type: personalForm.value.saving_type,
-      purpose_of_join_here: personalForm.value.purpose_of_join_here,
+      salary: personalFormData.value.salary,
+      saving_type: personalFormData.value.savingType,
+      purpose_of_join_here: personalFormData.value.purpose,
     })
     editingPersonal.value = false
-    // Auto-trigger recalculate after saving
     await recalculate()
-  } catch (e: any) {
-    personalError.value = e.response?.data?.errors ?? e.response?.data?.message ?? 'Gagal menyimpan'
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { errors?: string; message?: string } } }
+    personalError.value = err.response?.data?.errors ?? err.response?.data?.message ?? 'Gagal menyimpan'
     savingPersonal.value = false
   }
 }
 
 async function silentRecalculate() {
   if (!budgetPlan.value) return
-
   budgetRefreshing.value = true
   try {
-    const region = budgetPlan.value.region ?? ''
-    const savingType = budgetPlan.value.saving_type || personalForm.value.saving_type || 'recommendation'
+    const region = (budgetPlan.value.region as string) ?? ''
+    const savingType = (budgetPlan.value.saving_type as string) || personalFormData.value.savingType || 'recommendation'
     await api.post('/budget-plan/', {
       for_month: now.getMonth() + 1,
       for_year: now.getFullYear(),
@@ -521,33 +586,44 @@ async function silentRecalculate() {
     isDirty.value = false
     api.post('/daily-budget/sync-today').catch(() => {})
     showToast('Budget plan bulan ini diperbarui otomatis')
-  } catch (e: any) {
-    const msg = e?.response?.data?.errors ?? e?.response?.data?.message ?? 'error'
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { errors?: string; message?: string } } }
+    const msg = err?.response?.data?.errors ?? err?.response?.data?.message ?? 'error'
     showToast(`Gagal memperbarui budget: ${msg}`, 'error')
   } finally {
     budgetRefreshing.value = false
   }
 }
 
-async function addMandatory() {
+async function addMandatory(item: { category: string; description: string; amount: number; forMonth: number; forYear: number }) {
   addingExpense.value = true
+  const isCurrentCycle = item.forMonth === (now.getMonth() + 1) && item.forYear === now.getFullYear()
   try {
     await api.post('/mandatory-expenditure/', {
-      category: addForm.value.category,
-      amount: addAmountValue.value,
-      description: addForm.value.description,
+      category: item.category,
+      amount: item.amount,
+      description: item.description,
       transaction_date: new Date().toISOString(),
-      for_month: now.getMonth() + 1,
-      for_year: now.getFullYear(),
+      for_month: item.forMonth,
+      for_year: item.forYear,
     })
-    addForm.value = { category: '', description: '' }
-    resetAddAmount()
     showAddExpense.value = false
     await loadExpenses()
-    await silentRecalculate()
-  } catch {
-    showToast('Gagal menambah pengeluaran wajib', 'error')
-  } finally { addingExpense.value = false }
+    if (isCurrentCycle) {
+      // Refresh budget plan (backend sudah potong tabungan)
+      const res = await api.get(`/budget-plan/${now.getMonth() + 1}/${now.getFullYear()}`)
+      budgetPlan.value = res.data.data
+      showToast('Pengeluaran wajib ditambahkan, tabungan dipotong otomatis')
+    } else {
+      showToast('Dicatat — berlaku mulai gajian berikutnya')
+    }
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { errors?: string; message?: string } } }
+    const msg = err?.response?.data?.errors ?? err?.response?.data?.message ?? 'Gagal menambah pengeluaran wajib'
+    showToast(msg, 'error')
+  } finally {
+    addingExpense.value = false
+  }
 }
 
 async function deleteMandatory(id: string) {
@@ -565,28 +641,27 @@ const recalcPhases = ['Membaca data terbaru...', 'Menghitung ulang alokasi...', 
 async function recalculate() {
   recalculating.value = true
   recalcPhase.value = recalcPhases[0]
-  const phaseTimer = setInterval(() => {
-    const idx = recalcPhases.indexOf(recalcPhase.value)
-    if (idx < recalcPhases.length - 1) recalcPhase.value = recalcPhases[idx + 1]
-  }, 800)
 
   try {
-    await new Promise(r => setTimeout(r, 600))
     const region = budgetPlan.value?.region ?? 'Jakarta'
+    recalcPhase.value = recalcPhases[1]
     await api.post('/budget-plan/', {
       for_month: now.getMonth() + 1,
       for_year: now.getFullYear(),
-      saving_type: personalForm.value.saving_type,
+      saving_type: personalFormData.value.savingType,
       region,
     })
-    await new Promise(r => setTimeout(r, 1000))
+    recalcPhase.value = recalcPhases[2]
     const res = await api.get(`/budget-plan/${now.getMonth() + 1}/${now.getFullYear()}`)
     budgetPlan.value = res.data.data
     isDirty.value = false
-    // Sync allocated_amount tracker hari ini ke budget plan terbaru
     api.post('/daily-budget/sync-today').catch(() => {})
-  } catch {} finally {
-    clearInterval(phaseTimer)
+    showToast('Budget berhasil dihitung ulang')
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { errors?: string; message?: string } } }
+    const msg = err?.response?.data?.errors ?? err?.response?.data?.message ?? 'Gagal menghitung ulang budget'
+    showToast(msg, 'error')
+  } finally {
     recalculating.value = false
     savingPersonal.value = false
   }
