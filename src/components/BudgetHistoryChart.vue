@@ -1,17 +1,29 @@
 <template>
-  <div class="glass-card p-5">
+  <div class="glass-card p-5 mt-6">
     <!-- Header -->
     <div class="flex items-start justify-between mb-5 gap-3">
       <div>
         <h2 class="font-black text-white text-base">Riwayat Budget Harian</h2>
         <p class="text-slate-500 text-xs mt-0.5">Sejak awal hingga sekarang</p>
       </div>
-      <div class="flex gap-1 bg-white/5 rounded-xl p-1 flex-shrink-0">
+      <div class="flex items-center gap-2 flex-shrink-0">
+        <button
+          v-if="filteredRows.length > 0"
+          @click="doExportExcel"
+          class="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11"/>
+          </svg>
+          Excel
+        </button>
+      <div class="flex gap-1 bg-white/5 rounded-xl p-1">
         <button v-for="t in chartTypes" :key="t.value" @click="chartType = t.value"
           class="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
           :class="chartType === t.value ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-white'">
           {{ t.icon }}
         </button>
+      </div>
       </div>
     </div>
 
@@ -254,6 +266,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import * as XLSX from 'xlsx'
 import api from '@/api'
 import { formatRupiah, toLocaleDateStr, addDays } from '@/utils/formatting'
 import { CATEGORIES } from '@/constants/categories'
@@ -470,6 +483,27 @@ const areaBelow = computed(() => {
 const circumference = 238
 const savedArc = computed(() => (savedPct.value / 100) * circumference)
 const overArc  = computed(() => ((100 - savedPct.value) / 100) * circumference)
+
+// ── Export ────────────────────────────────────────────────────────────────────
+
+function doExportExcel() {
+  const rows_data = filteredRows.value.map(r => ({
+    'Tanggal': r.date,
+    'Budget (Rp)': r.total_allocated,
+    'Terpakai (Rp)': r.total_spent,
+    'Selisih (Rp)': r.delta,
+    'Status': r.delta >= 0 ? 'Hemat' : 'Over',
+  }))
+
+  const ws = XLSX.utils.json_to_sheet(rows_data)
+  ws['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 10 }]
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Riwayat Budget')
+
+  const label = `${rangeFrom.value}_sd_${rangeTo.value}`
+  XLSX.writeFile(wb, `riwayat_budget_${label}.xlsx`)
+}
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
 
