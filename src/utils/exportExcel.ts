@@ -12,14 +12,13 @@ export function exportTransactionsToExcel(transactions: Transaction[], label: st
 
   const ws = XLSX.utils.json_to_sheet(rows)
 
-  // Column widths
-  ws['!cols'] = [
-    { wch: 14 },
-    { wch: 30 },
-    { wch: 16 },
-    { wch: 12 },
-    { wch: 16 },
-  ]
+  ws['!cols'] = [{ wch: 14 }, { wch: 30 }, { wch: 16 }, { wch: 12 }, { wch: 18 }]
+
+  // Apply number format to Nominal column (E)
+  for (let i = 2; i <= rows.length + 1; i++) {
+    const cell = ws[`E${i}`]
+    if (cell) cell.z = '#,##0'
+  }
 
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Transaksi')

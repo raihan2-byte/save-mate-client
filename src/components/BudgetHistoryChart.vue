@@ -496,7 +496,17 @@ function doExportExcel() {
   }))
 
   const ws = XLSX.utils.json_to_sheet(rows_data)
-  ws['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 10 }]
+  ws['!cols'] = [{ wch: 14 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 10 }]
+
+  // Apply number format (#,##0) to numeric columns B, C, D for all data rows
+  const numFmt = '#,##0'
+  const numCols = ['B', 'C', 'D']
+  for (let i = 2; i <= rows_data.length + 1; i++) {
+    for (const col of numCols) {
+      const cell = ws[`${col}${i}`]
+      if (cell) cell.z = numFmt
+    }
+  }
 
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Riwayat Budget')
