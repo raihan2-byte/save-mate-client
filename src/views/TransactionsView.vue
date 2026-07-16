@@ -21,9 +21,21 @@
         <h1 class="text-2xl font-black text-white">Transaksi</h1>
         <p class="text-slate-500 text-sm mt-0.5">Riwayat pengeluaran harian</p>
       </div>
-      <AppButton variant="primary" @click="openAddModal" style="box-shadow: 0 0 20px rgba(16,185,129,0.3)">
-        ＋ Tambah
-      </AppButton>
+      <div class="flex items-center gap-2">
+        <button
+          v-if="transactions.length > 0"
+          @click="doExportExcel"
+          class="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11"/>
+          </svg>
+          Excel
+        </button>
+        <AppButton variant="primary" @click="openAddModal" style="box-shadow: 0 0 20px rgba(16,185,129,0.3)">
+          ＋ Tambah
+        </AppButton>
+      </div>
     </div>
 
     <!-- Filter card -->
@@ -192,6 +204,7 @@ import TransactionItem from '@/components/transactions/TransactionItem.vue'
 import DateFilterBar from '@/components/transactions/DateFilterBar.vue'
 import { formatCurrency, toLocaleDateStr, addDays } from '@/utils/formatting'
 import { extractError } from '@/utils/errors'
+import { exportTransactionsToExcel } from '@/utils/exportExcel'
 import { useListFilter } from '@/composables/useListFilter'
 import type { Transaction } from '@/types'
 
@@ -446,6 +459,15 @@ async function chooseDate(date: string) {
   } catch {
     showAmbiguousModal.value = false
   }
+}
+
+function doExportExcel() {
+  const label = filterMode.value === 'single'
+    ? selectedDate.value
+    : filterMode.value === 'range'
+      ? `${rangeFromDate.value}_sd_${rangeToDate.value}`
+      : 'semua'
+  exportTransactionsToExcel(transactions.value, label)
 }
 
 function deficitHandledKey() {

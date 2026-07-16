@@ -1,9 +1,21 @@
 <template>
   <div class="p-4 md:p-8 max-w-3xl mx-auto">
 
-    <div class="mb-6">
-      <h1 class="text-2xl font-black text-white">Ringkasan</h1>
-      <p class="text-slate-500 text-sm mt-0.5">{{ monthLabel }}</p>
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-black text-white">Ringkasan</h1>
+        <p class="text-slate-500 text-sm mt-0.5">{{ monthLabel }}</p>
+      </div>
+      <button
+        v-if="summary"
+        @click="doExportPdf"
+        class="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+      >
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11"/>
+        </svg>
+        PDF
+      </button>
     </div>
 
     <LoadingSkeleton v-if="loading" :rows="3" height="h-32" />
@@ -69,6 +81,7 @@ import type { MonthlySummary as BaseMonthlySummary } from '@/types/index'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { formatCurrency } from '@/utils/formatting'
+import { exportSummaryToPdf } from '@/utils/exportPdf'
 
 interface MonthlySummary extends BaseMonthlySummary {
   total_expense?: number
@@ -104,6 +117,11 @@ const details = computed(() => {
       display: withinBudget ? 'Dalam Budget ✅' : 'Melebihi Budget ⚠️' },
   ]
 })
+
+function doExportPdf() {
+  if (!summary.value) return
+  exportSummaryToPdf(summary.value, monthLabel.value)
+}
 
 async function loadSummary() {
   loading.value = true
