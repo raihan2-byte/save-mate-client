@@ -7,9 +7,9 @@
         <h1 class="text-2xl font-black text-white">Budget Plan</h1>
         <p class="text-slate-500 text-sm mt-0.5">Rencana keuangan per periode gajian</p>
       </div>
-      <div class="flex items-center gap-2 glass-card px-3 py-2 min-w-0 max-w-full">
+      <div class="flex items-center gap-1 glass-card px-2 py-2 min-w-0">
         <button @click="prevMonth" class="text-slate-400 hover:text-white transition-colors px-1 flex-shrink-0">◀</button>
-        <span class="font-semibold text-white text-xs min-w-0 flex-1 text-center truncate">{{ monthLabel }}</span>
+        <span class="font-semibold text-white text-[11px] min-w-0 flex-1 text-center truncate max-w-[160px]">{{ monthLabel }}</span>
         <button @click="nextMonth" class="text-slate-400 hover:text-white transition-colors px-1 flex-shrink-0">▶</button>
       </div>
     </div>
@@ -40,10 +40,10 @@
           <p class="text-emerald-300 text-xs font-semibold uppercase tracking-widest">
             {{ budget.mid_cycle_days && budget.mid_cycle_days > 0 ? `Budget s/d Gajian (${budget.mid_cycle_days} hari)` : 'Total Budget Bulanan' }}
           </p>
-          <p class="text-3xl font-black text-white mt-2 break-words">{{ formatCurrency((budget.food_amount ?? 0) + (budget.lifestyle_amount ?? 0) + (budget.savings_amount ?? 0)) }}</p>
+          <p class="text-3xl font-black text-white mt-2">{{ formatCurrencyShort((budget.food_amount ?? 0) + (budget.lifestyle_amount ?? 0) + (budget.savings_amount ?? 0)) }}</p>
           <div class="grid grid-cols-3 gap-1.5 mt-5">
             <div v-for="stat in budgetStats" :key="stat.label" class="bg-white/10 rounded-xl p-2 text-center backdrop-blur">
-              <p class="font-black text-white text-xs break-words">{{ formatCurrency(stat.value) }}</p>
+              <p class="font-black text-white text-xs">{{ formatCurrencyShort(stat.value) }}</p>
               <p class="text-emerald-200/60 text-[10px] mt-0.5">{{ stat.label }}</p>
             </div>
           </div>
@@ -72,7 +72,7 @@
         <div class="w-14 h-14 rounded-2xl bg-emerald-500/15 flex items-center justify-center text-2xl flex-shrink-0">📅</div>
         <div>
           <p class="text-slate-400 text-xs">Budget harian yang tersedia</p>
-          <p class="text-2xl font-black text-emerald-400">{{ formatCurrency(budget.daily_budget ?? 0) }}</p>
+          <p class="text-2xl font-black text-emerald-400">{{ formatCurrencyShort(budget.daily_budget ?? 0) }}</p>
           <p class="text-slate-500 text-xs mt-0.5">
             {{ budget.mid_cycle_days && budget.mid_cycle_days > 0
               ? `per hari selama ${budget.mid_cycle_days} hari ke gajian`
@@ -99,7 +99,7 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton.vue'
 import SectionCard from '@/components/ui/SectionCard.vue'
 import BudgetGenerateModal from '@/components/budget/BudgetGenerateModal.vue'
-import { formatCurrency } from '@/utils/formatting'
+import { formatCurrency, formatCurrencyShort } from '@/utils/formatting'
 import { usePersonalDataStore } from '@/stores/personalData'
 
 const pdStore = usePersonalDataStore()

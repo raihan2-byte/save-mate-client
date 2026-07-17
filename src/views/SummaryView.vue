@@ -33,7 +33,7 @@
           <p class="text-xs font-semibold uppercase tracking-widest mb-2" :class="net >= 0 ? 'text-emerald-300' : 'text-red-300'">
             {{ net >= 0 ? '✅ Keuangan Sehat' : '⚠️ Pengeluaran Melebihi Pemasukan' }}
           </p>
-          <p class="text-4xl font-black text-white">{{ formatCurrency(Math.abs(net)) }}</p>
+          <p class="text-4xl font-black text-white">{{ formatCurrencyShort(Math.abs(net)) }}</p>
           <p class="text-sm mt-1" :class="net >= 0 ? 'text-emerald-200/70' : 'text-red-200/70'">
             {{ net >= 0 ? 'Sisa / berhasil dihemat' : 'Defisit bulan ini' }}
           </p>
@@ -47,14 +47,14 @@
             <div class="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center text-sm">⬆️</div>
             <p class="text-slate-400 text-xs font-medium">Pemasukan</p>
           </div>
-          <p class="text-xl font-black text-emerald-400 tabular-nums">{{ formatCurrency(summary.total_income ?? 0) }}</p>
+          <p class="text-xl font-black text-emerald-400 tabular-nums">{{ formatCurrencyShort(summary.total_income ?? 0) }}</p>
         </div>
         <div class="glass-card p-5">
           <div class="flex items-center gap-2 mb-2">
             <div class="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center text-sm">⬇️</div>
             <p class="text-slate-400 text-xs font-medium">Pengeluaran</p>
           </div>
-          <p class="text-xl font-black text-red-400 tabular-nums">{{ formatCurrency(summary.total_expense ?? summary.total_spent ?? 0) }}</p>
+          <p class="text-xl font-black text-red-400 tabular-nums">{{ formatCurrencyShort(summary.total_expense ?? summary.total_spent ?? 0) }}</p>
         </div>
       </div>
 
@@ -78,7 +78,7 @@ import api from '@/api'
 import type { MonthlySummary as BaseMonthlySummary } from '@/types/index'
 import LoadingSkeleton from '@/components/ui/LoadingSkeleton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import { formatCurrency } from '@/utils/formatting'
+import { formatCurrency, formatCurrencyShort } from '@/utils/formatting'
 import { exportSummaryToPdf } from '@/utils/exportPdf'
 import { Download } from 'lucide-vue-next'
 
