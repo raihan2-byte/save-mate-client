@@ -8,7 +8,7 @@
       </div>
     </div>
     <div class="flex items-center gap-2">
-      <span class="font-bold text-emerald-400 text-sm tabular-nums">+{{ formatCurrencyShort(income.amount) }}</span>
+      <span class="font-bold text-emerald-400 text-sm tabular-nums">+{{ formatCurrency(income.amount) }}</span>
       <div class="flex gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
         <button
           @click="emit('delete')"
@@ -21,10 +21,13 @@
 
 <script setup lang="ts">
 import type { Income } from '@/types/index'
-import { formatCurrencyShort } from '@/utils/formatting'
 
 defineProps<{ income: Income }>()
 const emit = defineEmits<{ delete: [] }>()
+
+function formatCurrency(val: number) {
+  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val)
+}
 
 function formatDate(d: string) {
   if (!d) return ''

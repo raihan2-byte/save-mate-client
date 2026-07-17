@@ -38,7 +38,7 @@
 
         <div class="text-xs transition-colors duration-500"
           :class="isNegative ? 'text-red-200/70' : 'text-emerald-200/70'">
-          <span>Digunakan: {{ formatCurrencyShort(displaySpent) }}</span>
+          <span>Digunakan: {{ formatCurrency(displaySpent) }}</span>
         </div>
       </div>
     </div>

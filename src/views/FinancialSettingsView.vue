@@ -411,7 +411,7 @@ const monthLabel = computed(() => {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const fmtCur = formatCurrencyShort
+const fmtCur = formatCurrency
 const fmtShort = formatCurrencyShort
 
 function showToast(message: string, type: 'success' | 'error' = 'success') {

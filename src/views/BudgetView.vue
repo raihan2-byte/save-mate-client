@@ -57,7 +57,7 @@
           <div v-for="item in breakdown" :key="item.label">
             <div class="flex justify-between mb-1.5 text-sm">
               <span class="text-slate-300 flex items-center gap-2"><span>{{ item.icon }}</span>{{ item.label }}</span>
-              <span class="font-semibold text-white tabular-nums">{{ formatCurrencyShort(item.value) }}</span>
+              <span class="font-semibold text-white tabular-nums">{{ formatCurrency(item.value) }}</span>
             </div>
             <div class="h-2 rounded-full bg-white/5 overflow-hidden">
               <div class="h-full rounded-full transition-all duration-700" :class="item.color"

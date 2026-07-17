@@ -108,10 +108,10 @@ const details = computed(() => {
   const totalOut = (s.total_food_spent ?? 0) + (s.total_lifestyle_spent ?? 0) + (s.total_mandatory ?? 0)
   const withinBudget = s.total_income > 0 ? totalOut <= s.total_income : true
   return [
-    { icon: '🍜', label: 'Pengeluaran Makan',     color: 'text-slate-300', display: formatCurrencyShort(s.total_food_spent ?? 0) },
-    { icon: '🛍️', label: 'Pengeluaran Lifestyle', color: 'text-slate-300', display: formatCurrencyShort(s.total_lifestyle_spent ?? 0) },
-    { icon: '🏠', label: 'Pengeluaran Wajib',     color: 'text-slate-300', display: formatCurrencyShort(s.total_mandatory ?? 0) },
-    { icon: '💰', label: 'Tabungan',               color: 'text-emerald-400', display: formatCurrencyShort(s.total_savings ?? 0) },
+    { icon: '🍜', label: 'Pengeluaran Makan',     color: 'text-slate-300', display: formatCurrency(s.total_food_spent ?? 0) },
+    { icon: '🛍️', label: 'Pengeluaran Lifestyle', color: 'text-slate-300', display: formatCurrency(s.total_lifestyle_spent ?? 0) },
+    { icon: '🏠', label: 'Pengeluaran Wajib',     color: 'text-slate-300', display: formatCurrency(s.total_mandatory ?? 0) },
+    { icon: '💰', label: 'Tabungan',               color: 'text-emerald-400', display: formatCurrency(s.total_savings ?? 0) },
     { icon: '📊', label: 'vs Budget',             color: withinBudget ? 'text-emerald-400' : 'text-red-400',
       display: withinBudget ? 'Dalam Budget ✅' : 'Melebihi Budget ⚠️' },
   ]
