@@ -64,7 +64,7 @@
     <nav class="fixed bottom-0 left-0 right-0 md:hidden z-20 border-t border-white/10 bg-slate-950/90 backdrop-blur-xl flex" style="padding-bottom: env(safe-area-inset-bottom)">
       <BottomNavItem to="/app"              :icon="icons.home"    label="Home" />
       <BottomNavItem to="/app/transactions" :icon="icons.tx"      label="Transaksi" />
-      <BottomNavItem to="/app/budget"       :icon="icons.budget"  label="Budget" />
+      <BottomNavItem to="/app/income"       :icon="icons.income"  label="Pemasukan" />
       <BottomNavItem to="/app/summary"      :icon="icons.summary" label="Ringkasan" />
       <BottomNavItem to="/app/profile"      :icon="icons.profile" label="Profil" />
     </nav>
