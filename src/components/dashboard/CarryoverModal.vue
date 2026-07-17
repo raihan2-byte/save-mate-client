@@ -16,7 +16,7 @@
             <span class="text-lg">{{ catIcons[item.category] ?? '📦' }}</span>
             <span class="font-semibold text-white capitalize text-sm">{{ catLabels[item.category] ?? item.category }}</span>
           </div>
-          <span class="font-black text-emerald-400">+{{ formatCurrency(item.remaining) }}</span>
+          <span class="font-black text-emerald-400">+{{ formatCurrencyShort(item.remaining) }}</span>
         </div>
         <div class="grid grid-cols-2 gap-2">
           <button v-for="opt in carryoverOptions" :key="opt.action"

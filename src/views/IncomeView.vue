@@ -88,7 +88,7 @@
     <div v-if="filteredIncomes.length > 0" class="grid grid-cols-2 gap-3 mb-4">
       <div class="glass-card p-3 text-center">
         <p class="text-slate-500 text-[10px] uppercase tracking-widest mb-1">Total Masuk</p>
-        <p class="font-black text-emerald-400 text-base">+{{ formatCurrency(totalIncome) }}</p>
+        <p class="font-black text-emerald-400 text-base">+{{ formatCurrencyShort(totalIncome) }}</p>
       </div>
       <div class="glass-card p-3 text-center">
         <p class="text-slate-500 text-[10px] uppercase tracking-widest mb-1">Transaksi</p>

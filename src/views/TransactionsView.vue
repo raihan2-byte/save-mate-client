@@ -58,7 +58,7 @@
     <div v-if="transactions.length > 0" class="grid grid-cols-2 gap-2 mb-4">
       <div class="glass-card p-3 text-center">
         <p class="text-slate-500 text-[10px] uppercase tracking-widest mb-1">Total Keluar</p>
-        <p class="font-black text-red-400 text-base">{{ formatCurrency(totalSpent) }}</p>
+        <p class="font-black text-red-400 text-base">{{ formatCurrencyShort(totalSpent) }}</p>
       </div>
       <div class="glass-card p-3 text-center">
         <p class="text-slate-500 text-[10px] uppercase tracking-widest mb-1">Transaksi</p>

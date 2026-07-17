@@ -50,7 +50,7 @@
           :style="{ width: Math.min(foodUsedPct, 100) + '%' }" />
       </div>
       <div class="flex justify-between text-xs text-slate-500">
-        <span>Terpakai: <span class="text-white font-medium">{{ formatCurrency(foodSpent) }}</span></span>
+        <span>Terpakai: <span class="text-white font-medium">{{ formatCurrencyShort(foodSpent) }}</span></span>
         <span>Alokasi: <span class="text-white font-medium">{{ formatCurrencyShort(foodAllocated) }}</span></span>
       </div>
     </div>
@@ -137,7 +137,7 @@
           </div>
           <span class="font-bold text-sm tabular-nums"
             :class="tx.type === 'income' ? 'text-emerald-400' : 'text-red-400'">
-            {{ tx.type === 'income' ? '+' : '-' }}{{ formatCurrency(tx.amount) }}
+            {{ tx.type === 'income' ? '+' : '-' }}{{ formatCurrencyShort(tx.amount) }}
           </span>
         </div>
       </div>
@@ -307,8 +307,8 @@ const todayDate = ref(new Date().toLocaleDateString('id-ID', {
 const firstName = computed(() => auth.user?.username?.split(' ')[0] ?? 'Pengguna')
 
 const summaryStats = computed(() => [
-  { icon: '⬇️', value: formatCurrency(displaySpent.value), label: 'Terpakai' },
-  { icon: '📅', value: formatCurrency(displayAllocated.value), label: 'Budget/Hari' },
+  { icon: '⬇️', value: formatCurrencyShort(displaySpent.value), label: 'Terpakai' },
+  { icon: '📅', value: formatCurrencyShort(displayAllocated.value), label: 'Budget/Hari' },
   { icon: '💳', value: todayTx.value.length + 'x', label: 'Transaksi' },
 ])
 

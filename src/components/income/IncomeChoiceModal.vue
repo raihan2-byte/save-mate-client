@@ -4,7 +4,7 @@
       <h2 class="font-black text-white text-lg">Mau diapain uangnya?</h2>
       <p class="text-slate-500 text-sm mt-1">
         Pilih apa yang mau kamu lakukan dengan
-        <span class="text-emerald-400 font-semibold">{{ formatCurrency(income?.amount ?? 0) }}</span>
+        <span class="text-emerald-400 font-semibold">{{ formatCurrencyShort(income?.amount ?? 0) }}</span>
       </p>
     </div>
 
@@ -20,7 +20,7 @@
           <span class="text-2xl">🏦</span>
           <div>
             <p class="font-bold text-white text-sm">Tabungin</p>
-            <p class="text-emerald-400 text-xs mt-0.5">Tabunganmu bertambah {{ formatCurrency(income?.amount ?? 0) }}</p>
+            <p class="text-emerald-400 text-xs mt-0.5">Tabunganmu bertambah {{ formatCurrencyShort(income?.amount ?? 0) }}</p>
           </div>
         </div>
       </button>
@@ -41,7 +41,7 @@
             <p class="text-xs mt-0.5" :class="tomorrowIsPayday ? 'text-slate-600' : 'text-emerald-400'">
               {{ tomorrowIsPayday
                 ? 'Tidak tersedia — besok mulai siklus baru'
-                : 'Besok dapat tambahan ' + formatCurrency(income?.amount ?? 0) }}
+                : 'Besok dapat tambahan ' + formatCurrencyShort(income?.amount ?? 0) }}
             </p>
           </div>
           <span v-if="tomorrowIsPayday" class="text-[10px] text-slate-600 bg-white/5 px-2 py-1 rounded-full border border-white/[0.08]">Nonaktif</span>
@@ -74,7 +74,7 @@
           >
             <span class="text-white font-semibold text-xs leading-tight">{{ opt.title }}</span>
             <span class="text-slate-400 text-[10px] mt-0.5">{{ opt.sub }}</span>
-            <span class="text-emerald-400 text-xs font-bold mt-1">+{{ formatCurrency((income?.amount ?? 0) / opt.days) }}/hari</span>
+            <span class="text-emerald-400 text-xs font-bold mt-1">+{{ formatCurrencyShort((income?.amount ?? 0) / opt.days) }}/hari</span>
           </button>
         </div>
       </div>
@@ -94,6 +94,7 @@ import ModalWrapper from '@/components/ui/ModalWrapper.vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import { SPREAD_DURATIONS } from '@/constants/budgetConfig'
 import type { Income } from '@/types/index'
+import { formatCurrencyShort } from '@/utils/formatting'
 
 const props = defineProps<{
   modelValue: boolean
@@ -131,7 +132,4 @@ const spreadOptions = computed(() => {
   }).sort((a, b) => b.days - a.days)
 })
 
-function formatCurrency(val: number) {
-  return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(val)
-}
 </script>
