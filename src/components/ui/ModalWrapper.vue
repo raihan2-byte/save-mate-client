@@ -3,16 +3,14 @@
     <Transition name="modal-fade">
       <div
         v-if="modelValue"
-        class="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 backdrop-blur-sm"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
         @click.self="close"
       >
         <Transition name="modal-slide">
           <div
             v-if="modelValue"
-            :class="['w-full rounded-3xl border border-white/10 bg-slate-900 p-5 mx-4 md:mx-0', maxWidth]"
+            :class="['w-full rounded-3xl border border-white/10 bg-slate-900 p-5', maxWidth]"
           >
-            <!-- Mobile drag handle -->
-            <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-5 md:hidden" />
             <slot />
           </div>
         </Transition>
@@ -58,24 +56,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   opacity: 0;
 }
 
-/* Mobile: slide up / Desktop: scale */
 .modal-slide-enter-active,
 .modal-slide-leave-active {
-  transition: transform 0.3s ease, opacity 0.3s ease;
+  transition: transform 0.25s ease, opacity 0.25s ease;
 }
-
-/* Mobile default */
 .modal-slide-enter-from,
 .modal-slide-leave-to {
-  transform: translateY(100%);
+  transform: scale(0.95);
   opacity: 0;
-}
-
-@media (min-width: 768px) {
-  .modal-slide-enter-from,
-  .modal-slide-leave-to {
-    transform: scale(0.95);
-    opacity: 0;
-  }
 }
 </style>
