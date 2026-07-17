@@ -20,11 +20,11 @@
               :class="isNegative ? 'text-red-300' : 'text-emerald-300'">
               {{ isNegative ? 'Over Budget Hari Ini' : 'Sisa Budget Hari Ini' }}
             </p>
-            <p class="text-4xl font-black text-white mt-1">
+            <p class="text-3xl font-black text-white mt-1 break-words">
               {{ formatCurrencyShort(displayRemaining) }}
             </p>
           </div>
-          <div class="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur flex items-center justify-center text-3xl border border-white/20">
+          <div class="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur flex items-center justify-center text-2xl border border-white/20 flex-shrink-0">
             💰
           </div>
         </div>

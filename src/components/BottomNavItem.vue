@@ -1,7 +1,7 @@
 <template>
   <RouterLink
     :to="to"
-    class="flex-1 flex flex-col items-center py-3 gap-0.5 text-[10px] font-medium transition-colors"
+    class="flex-1 flex flex-col items-center py-2 gap-0.5 text-[9px] font-medium transition-colors"
     :class="isActive ? 'text-emerald-400' : 'text-slate-500'"
   >
     <span class="text-xl leading-none">{{ icon }}</span>

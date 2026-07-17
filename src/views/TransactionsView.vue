@@ -22,13 +22,14 @@
         <button
           v-if="transactions.length > 0"
           @click="doExportExcel"
-          class="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+          class="flex items-center gap-1.5 text-xs font-semibold px-2 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+          title="Export Excel"
         >
           <Download class="w-3.5 h-3.5" />
-          Excel
+          <span class="hidden sm:inline">Excel</span>
         </button>
         <AppButton variant="primary" @click="openAddModal" style="box-shadow: 0 0 20px rgba(16,185,129,0.3)">
-          ＋ Tambah
+          ＋ <span class="hidden sm:inline">Tambah</span>
         </AppButton>
       </div>
     </div>
@@ -54,7 +55,7 @@
     />
 
     <!-- Summary bar -->
-    <div v-if="transactions.length > 0" class="grid grid-cols-2 gap-3 mb-4">
+    <div v-if="transactions.length > 0" class="grid grid-cols-2 gap-2 mb-4">
       <div class="glass-card p-3 text-center">
         <p class="text-slate-500 text-[10px] uppercase tracking-widest mb-1">Total Keluar</p>
         <p class="font-black text-red-400 text-base">{{ formatCurrency(totalSpent) }}</p>

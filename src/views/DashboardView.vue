@@ -24,7 +24,7 @@
     />
 
     <!-- Stats row -->
-    <div class="grid grid-cols-3 gap-3 mb-6">
+    <div class="grid grid-cols-3 gap-1.5 mb-6">
       <div v-for="stat in summaryStats" :key="stat.label"
         class="glass-card p-4 text-center">
         <p class="text-xl mb-1">{{ stat.icon }}</p>
@@ -67,7 +67,7 @@
     <!-- Quick actions -->
     <div class="mb-6">
       <h2 class="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-3">Aksi Cepat</h2>
-      <div class="grid grid-cols-2 gap-3">
+      <div class="grid grid-cols-2 gap-2">
         <RouterLink v-for="action in quickActions" :key="action.label" :to="action.to"
           class="glass-card p-4 flex items-center gap-3 hover:border-emerald-500/30 hover:-translate-y-0.5 transition-all group">
           <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
@@ -144,7 +144,7 @@
     </div>
 
     <!-- Budget history chart -->
-    <BudgetHistoryChart class="mt-6" />
+    <BudgetHistoryChart />
 
   </div>
 </template>

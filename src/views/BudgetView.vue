@@ -2,15 +2,15 @@
   <div class="p-4 md:p-8 max-w-3xl mx-auto">
 
     <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-6">
       <div>
         <h1 class="text-2xl font-black text-white">Budget Plan</h1>
         <p class="text-slate-500 text-sm mt-0.5">Rencana keuangan per periode gajian</p>
       </div>
-      <div class="flex items-center gap-2 glass-card px-3 py-2">
-        <button @click="prevMonth" class="text-slate-400 hover:text-white transition-colors px-1">◀</button>
-        <span class="font-semibold text-white text-sm min-w-[180px] text-center">{{ monthLabel }}</span>
-        <button @click="nextMonth" class="text-slate-400 hover:text-white transition-colors px-1">▶</button>
+      <div class="flex items-center gap-2 glass-card px-3 py-2 min-w-0 max-w-full">
+        <button @click="prevMonth" class="text-slate-400 hover:text-white transition-colors px-1 flex-shrink-0">◀</button>
+        <span class="font-semibold text-white text-xs min-w-0 flex-1 text-center truncate">{{ monthLabel }}</span>
+        <button @click="nextMonth" class="text-slate-400 hover:text-white transition-colors px-1 flex-shrink-0">▶</button>
       </div>
     </div>
 
@@ -34,16 +34,16 @@
 
     <div v-else class="space-y-5">
       <!-- Hero card -->
-      <div class="relative overflow-hidden rounded-3xl p-6 border border-emerald-500/20 bg-emerald-gradient">
+      <div class="relative overflow-hidden rounded-3xl p-4 md:p-6 border border-emerald-500/20 bg-emerald-gradient">
         <div class="pointer-events-none absolute -top-10 -right-10 w-52 h-52 bg-emerald-400/15 blur-3xl rounded-full" />
         <div class="relative z-10">
           <p class="text-emerald-300 text-xs font-semibold uppercase tracking-widest">
             {{ budget.mid_cycle_days && budget.mid_cycle_days > 0 ? `Budget s/d Gajian (${budget.mid_cycle_days} hari)` : 'Total Budget Bulanan' }}
           </p>
-          <p class="text-4xl font-black text-white mt-2">{{ formatCurrency((budget.food_amount ?? 0) + (budget.lifestyle_amount ?? 0) + (budget.savings_amount ?? 0)) }}</p>
-          <div class="grid grid-cols-3 gap-3 mt-5">
-            <div v-for="stat in budgetStats" :key="stat.label" class="bg-white/10 rounded-xl p-3 text-center backdrop-blur">
-              <p class="font-black text-white text-base">{{ formatCurrency(stat.value) }}</p>
+          <p class="text-3xl font-black text-white mt-2 break-words">{{ formatCurrency((budget.food_amount ?? 0) + (budget.lifestyle_amount ?? 0) + (budget.savings_amount ?? 0)) }}</p>
+          <div class="grid grid-cols-3 gap-1.5 mt-5">
+            <div v-for="stat in budgetStats" :key="stat.label" class="bg-white/10 rounded-xl p-2 text-center backdrop-blur">
+              <p class="font-black text-white text-xs break-words">{{ formatCurrency(stat.value) }}</p>
               <p class="text-emerald-200/60 text-[10px] mt-0.5">{{ stat.label }}</p>
             </div>
           </div>

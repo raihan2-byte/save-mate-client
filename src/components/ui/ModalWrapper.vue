@@ -9,7 +9,7 @@
         <Transition name="modal-slide">
           <div
             v-if="modelValue"
-            :class="['w-full rounded-3xl border border-white/10 bg-slate-900 p-6', maxWidth]"
+            :class="['w-full rounded-3xl border border-white/10 bg-slate-900 p-5 mx-4 md:mx-0', maxWidth]"
           >
             <!-- Mobile drag handle -->
             <div class="w-10 h-1 bg-white/20 rounded-full mx-auto mb-5 md:hidden" />

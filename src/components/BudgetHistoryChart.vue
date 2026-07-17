@@ -6,22 +6,25 @@
         <h2 class="font-black text-white text-base">Riwayat Budget Harian</h2>
         <p class="text-slate-500 text-xs mt-0.5">Sejak awal hingga sekarang</p>
       </div>
-      <div class="flex items-center gap-2 flex-shrink-0">
-        <button
-          v-if="filteredRows.length > 0"
-          @click="doExportExcel"
-          class="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
-        >
-          <Download class="w-3.5 h-3.5" />
-          Excel
-        </button>
-      <div class="flex gap-1 bg-white/5 rounded-xl p-1">
-        <button v-for="t in chartTypes" :key="t.value" @click="chartType = t.value"
-          class="px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
-          :class="chartType === t.value ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-white'">
-          {{ t.icon }}
-        </button>
-      </div>
+      <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
+        <div class="flex items-center gap-1.5">
+          <button
+            v-if="filteredRows.length > 0"
+            @click="doExportExcel"
+            class="flex items-center gap-1 text-xs font-semibold px-2 py-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+            title="Export Excel"
+          >
+            <Download class="w-3.5 h-3.5" />
+            <span class="hidden sm:inline">Excel</span>
+          </button>
+        </div>
+        <div class="flex gap-1 bg-white/5 rounded-xl p-1">
+          <button v-for="t in chartTypes" :key="t.value" @click="chartType = t.value"
+            class="px-2 py-1.5 rounded-lg text-xs font-semibold transition-all"
+            :class="chartType === t.value ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-white'">
+            {{ t.icon }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -57,7 +60,7 @@
     </div>
 
     <!-- Stats summary -->
-    <div class="grid grid-cols-3 gap-2 mb-5">
+    <div class="grid grid-cols-3 gap-1.5 mb-5">
       <div class="bg-white/3 rounded-xl p-3 text-center">
         <p class="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Total Hari</p>
         <p class="font-black text-white text-sm">{{ filteredRows.length }}</p>
@@ -145,7 +148,7 @@
       </div>
 
       <!-- DONUT CHART -->
-      <div v-else-if="chartType === 'donut'" class="flex items-center gap-6">
+      <div v-else-if="chartType === 'donut'" class="flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:gap-6">
         <div class="relative w-40 h-40 flex-shrink-0 mx-auto">
           <svg viewBox="0 0 100 100" class="w-full h-full -rotate-90">
             <circle cx="50" cy="50" r="38" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="16"/>

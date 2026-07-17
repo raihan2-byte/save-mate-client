@@ -47,7 +47,7 @@
           <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center font-black text-white text-xs shadow-[0_0_15px_rgba(16,185,129,0.3)]">
             CW
           </div>
-          <span class="font-black text-white">CipuyWallet</span>
+          <span class="font-black text-white text-sm truncate max-w-[140px]">CipuyWallet</span>
         </div>
         <RouterLink to="/app/profile" class="w-9 h-9 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-slate-300 hover:border-emerald-500/40 transition-all">
           👤

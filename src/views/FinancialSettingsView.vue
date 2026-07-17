@@ -233,7 +233,7 @@
         </div>
 
         <template v-if="budgetRefreshing">
-          <div class="grid grid-cols-2 gap-3 mb-3">
+          <div class="grid grid-cols-2 gap-2 mb-3">
             <div class="h-16 rounded-2xl bg-white/5 animate-pulse" />
             <div class="h-16 rounded-2xl bg-white/5 animate-pulse" />
           </div>
@@ -243,7 +243,7 @@
         </template>
 
         <template v-else>
-          <div class="grid grid-cols-2 gap-3 mb-3">
+          <div class="grid grid-cols-2 gap-2 mb-3">
             <div class="bg-red-500/5 border border-red-500/15 rounded-2xl p-3 text-center">
               <p class="text-red-300 text-xs mb-1">📕 Tabungan/hari</p>
               <p class="font-black text-white text-lg">{{ fmtShort(budgetPlan.daily_savings ?? 0) }}</p>
