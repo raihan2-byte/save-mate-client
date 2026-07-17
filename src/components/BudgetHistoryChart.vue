@@ -12,9 +12,7 @@
           @click="doExportExcel"
           class="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
         >
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11"/>
-          </svg>
+          <Download class="w-3.5 h-3.5" />
           Excel
         </button>
       <div class="flex gap-1 bg-white/5 rounded-xl p-1">
@@ -267,6 +265,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import * as XLSX from 'xlsx'
+import { Download } from 'lucide-vue-next'
 import api from '@/api'
 import { formatRupiah, toLocaleDateStr, addDays } from '@/utils/formatting'
 import { CATEGORIES } from '@/constants/categories'

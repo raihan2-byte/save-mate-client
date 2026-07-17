@@ -6,10 +6,7 @@
       <div v-if="recalculating"
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
         <div class="glass-card px-6 py-4 flex items-center gap-3">
-          <svg class="animate-spin w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-          </svg>
+          <Loader2 class="animate-spin w-5 h-5 text-emerald-400" />
           <span class="text-white text-sm font-medium">Menghitung ulang budget...</span>
         </div>
       </div>
@@ -27,9 +24,7 @@
           @click="doExportExcel"
           class="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
         >
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11"/>
-          </svg>
+          <Download class="w-3.5 h-3.5" />
           Excel
         </button>
         <AppButton variant="primary" @click="openAddModal" style="box-shadow: 0 0 20px rgba(16,185,129,0.3)">
@@ -205,6 +200,7 @@ import DateFilterBar from '@/components/transactions/DateFilterBar.vue'
 import { formatCurrency, toLocaleDateStr, addDays } from '@/utils/formatting'
 import { extractError } from '@/utils/errors'
 import { exportTransactionsToExcel } from '@/utils/exportExcel'
+import { Loader2, Download } from 'lucide-vue-next'
 import { useListFilter } from '@/composables/useListFilter'
 import type { Transaction } from '@/types'
 

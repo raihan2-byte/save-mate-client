@@ -5,23 +5,14 @@
     :class="[baseClasses, variantClasses, sizeClasses, { 'opacity-70 cursor-not-allowed': disabled || loading }]"
     @click="emit('click', $event)"
   >
-    <!-- Spinner -->
-    <svg
-      v-if="loading"
-      class="animate-spin -ml-1 mr-2 h-4 w-4"
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-    >
-      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-    </svg>
+    <Loader2 v-if="loading" class="animate-spin -ml-1 mr-2 h-4 w-4" />
     <slot />
   </button>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { Loader2 } from 'lucide-vue-next'
 
 const props = withDefaults(defineProps<{
   variant?: 'primary' | 'danger' | 'ghost' | 'outline'

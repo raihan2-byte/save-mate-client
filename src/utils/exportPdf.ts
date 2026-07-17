@@ -36,7 +36,7 @@ export function exportSummaryToPdf(summary: SummaryData, monthLabel: string) {
   const net = summary.net_balance ?? 0
   doc.setFontSize(13)
   doc.setTextColor(net >= 0 ? 16 : 200, net >= 0 ? 185 : 30, net >= 0 ? 129 : 30)
-  doc.text(net >= 0 ? '✔ Keuangan Sehat' : '⚠ Pengeluaran Melebihi Pemasukan', 14, 42)
+  doc.text(net >= 0 ? 'Keuangan Sehat' : 'Pengeluaran Melebihi Pemasukan', 14, 42)
 
   doc.setFontSize(20)
   doc.setTextColor(30, 30, 30)
@@ -54,13 +54,13 @@ export function exportSummaryToPdf(summary: SummaryData, monthLabel: string) {
     startY: 66,
     head: [['Keterangan', 'Jumlah']],
     body: [
-      ['⬆️ Total Pemasukan', fmt(summary.total_income ?? 0)],
-      ['⬇️ Total Pengeluaran', fmt(summary.total_expense ?? summary.total_spent ?? 0)],
-      ['🍜 Pengeluaran Makan', fmt(summary.total_food_spent ?? 0)],
-      ['🛍️ Pengeluaran Lifestyle', fmt(summary.total_lifestyle_spent ?? 0)],
-      ['🏠 Pengeluaran Wajib', fmt(summary.total_mandatory ?? 0)],
-      ['💰 Tabungan', fmt(summary.total_savings ?? 0)],
-      ['📊 Status vs Budget', withinBudget ? 'Dalam Budget ✅' : 'Melebihi Budget ⚠️'],
+      ['Total Pemasukan', fmt(summary.total_income ?? 0)],
+      ['Total Pengeluaran', fmt(summary.total_expense ?? summary.total_spent ?? 0)],
+      ['Pengeluaran Makan', fmt(summary.total_food_spent ?? 0)],
+      ['Pengeluaran Lifestyle', fmt(summary.total_lifestyle_spent ?? 0)],
+      ['Pengeluaran Wajib', fmt(summary.total_mandatory ?? 0)],
+      ['Tabungan', fmt(summary.total_savings ?? 0)],
+      ['Status vs Budget', withinBudget ? 'Dalam Budget' : 'Melebihi Budget'],
     ],
     styles: { fontSize: 10, cellPadding: 4 },
     headStyles: { fillColor: [16, 185, 129], textColor: 255, fontStyle: 'bold' },
@@ -73,7 +73,7 @@ export function exportSummaryToPdf(summary: SummaryData, monthLabel: string) {
   const finalY = (doc as any).lastAutoTable.finalY + 8
   doc.setFontSize(8)
   doc.setTextColor(160, 160, 160)
-  doc.text(`Digenerate oleh Save Mate — ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`, 14, finalY)
+  doc.text(`Digenerate oleh Save Mate - ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`, 14, finalY)
 
   const filename = `laporan_${monthLabel.replace(/\s+/g, '_')}.pdf`
   doc.save(filename)

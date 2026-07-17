@@ -11,9 +11,7 @@
         @click="doExportPdf"
         class="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
       >
-        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11"/>
-        </svg>
+        <Download class="w-3.5 h-3.5" />
         PDF
       </button>
     </div>
@@ -82,6 +80,7 @@ import LoadingSkeleton from '@/components/ui/LoadingSkeleton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { formatCurrency } from '@/utils/formatting'
 import { exportSummaryToPdf } from '@/utils/exportPdf'
+import { Download } from 'lucide-vue-next'
 
 interface MonthlySummary extends BaseMonthlySummary {
   total_expense?: number

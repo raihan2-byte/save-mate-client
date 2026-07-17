@@ -6,10 +6,7 @@
       <div v-if="recalculating"
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
         <div class="glass-card px-6 py-4 flex items-center gap-3">
-          <svg class="animate-spin w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-          </svg>
+          <Loader2 class="animate-spin w-5 h-5 text-emerald-400" />
           <span class="text-white text-sm font-medium">Menghitung ulang budget...</span>
         </div>
       </div>
@@ -202,6 +199,7 @@ import IncomeChoiceModal from '@/components/income/IncomeChoiceModal.vue'
 import { formatCurrency, toLocaleDateStr, addDays as addDaysUtil } from '@/utils/formatting'
 import { usePersonalDataStore } from '@/stores/personalData'
 import type { Income } from '@/types/index'
+import { Loader2 } from 'lucide-vue-next'
 
 const incomes = ref<Income[]>([])
 const loading = ref(true)
