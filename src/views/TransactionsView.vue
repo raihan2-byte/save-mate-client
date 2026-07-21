@@ -139,7 +139,7 @@
     </ModalWrapper>
 
     <!-- Budget Exceeded Modal -->
-    <ModalWrapper v-model="showBudgetExceededModal">
+    <ModalWrapper v-model="showBudgetExceededModal" persistent>
       <div class="flex justify-center mb-4">
         <div class="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-3xl">
           ⚠️
@@ -153,9 +153,29 @@
         {{ new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(budgetExceeded?.deficit ?? 0) }}
       </p>
       <div class="space-y-2 mb-6">
-        <div class="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4">
-          <p class="text-amber-300 text-sm font-semibold mb-1">Potong jatah besok:</p>
-          <p class="text-slate-400 text-xs">Kekurangan dikurangi dari budget harian besok. Kamu terdorong lebih hemat besoknya.</p>
+        <!-- Potong Besok card — state changes based on tomorrow capacity -->
+        <div class="rounded-2xl p-4 border"
+          :class="tomorrowCutCapacity > 0
+            ? 'bg-amber-500/5 border-amber-500/20'
+            : 'bg-slate-800/60 border-white/5'">
+          <template v-if="tomorrowCutCapacity <= 0">
+            <p class="text-slate-500 text-sm font-semibold mb-1">Potong jatah besok:</p>
+            <p class="text-slate-600 text-xs">Budget besok sudah mencapai batas potongan non-makanan. Pilih potong tabungan.</p>
+          </template>
+          <template v-else-if="(budgetExceeded?.deficit ?? 0) - tomorrowCutCapacity > 1">
+            <!-- True split case: savings portion is at least 1 rupiah -->
+            <p class="text-amber-300 text-sm font-semibold mb-1">Potong sebagian ke besok + tabungan:</p>
+            <p class="text-slate-400 text-xs">
+              <span class="text-white font-semibold">{{ new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(tomorrowCutCapacity) }}</span>
+              dipotong dari budget besok, sisanya
+              <span class="text-white font-semibold">{{ new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(Math.round((budgetExceeded?.deficit ?? 0) - tomorrowCutCapacity)) }}</span>
+              dari tabungan.
+            </p>
+          </template>
+          <template v-else>
+            <p class="text-amber-300 text-sm font-semibold mb-1">Potong jatah besok:</p>
+            <p class="text-slate-400 text-xs">Kekurangan dikurangi dari budget harian besok. Kamu terdorong lebih hemat besoknya.</p>
+          </template>
         </div>
         <div class="bg-violet-500/5 border border-violet-500/20 rounded-2xl p-4">
           <p class="text-violet-300 text-sm font-semibold mb-1">Potong dari tabungan:</p>
@@ -169,8 +189,11 @@
         <AppButton variant="outline" class="flex-1" :loading="deductingSavings" @click="deductFromSavings">
           {{ deductingSavings ? 'Memproses...' : '🏦 Potong Tabungan' }}
         </AppButton>
-        <AppButton variant="danger" class="flex-1" :loading="applyingDeficit" @click="confirmDeficit">
-          {{ applyingDeficit ? 'Memproses...' : '✂️ Potong Besok' }}
+        <AppButton variant="danger" class="flex-1"
+          :loading="applyingDeficit"
+          :disabled="tomorrowCutCapacity <= 0"
+          @click="confirmDeficit">
+          {{ applyingDeficit ? 'Memproses...' : tomorrowCutCapacity <= 0 ? '✂️ Penuh' : '✂️ Potong Besok' }}
         </AppButton>
       </div>
     </ModalWrapper>
@@ -188,7 +211,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onActivated } from 'vue'
 import api from '@/api'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import ModalWrapper from '@/components/ui/ModalWrapper.vue'
@@ -237,6 +260,12 @@ const showBudgetExceededModal = ref(false)
 const budgetExceeded = ref<{ category: string; deficit: number } | null>(null)
 const applyingDeficit = ref(false)
 const deductingSavings = ref(false)
+// How much can still be cut from tomorrow's non-food budget (0 = tomorrow already maxed)
+const tomorrowCutCapacity = ref(0)
+// Versioned token: incremented by user choice to cancel stale overrun checks
+let _overrunVer = 0
+// True while user is actively processing a deficit choice — blocks any re-trigger
+const isHandlingOverrun = ref(false)
 
 const recalculating = ref(false)
 
@@ -272,6 +301,7 @@ async function confirmDelete() {
     await api.delete(`/transactions/${deletingId.value}`)
     showDeleteModal.value = false
     await waitAndReload()
+    await checkDailyBudgetOverrun()
   } catch (e: unknown) {
     loadError.value = extractError(e, 'Gagal menghapus transaksi')
   } finally {
@@ -279,7 +309,7 @@ async function confirmDelete() {
   }
 }
 
-function onFormSaved(
+async function onFormSaved(
   clarification?: { message: string; options: { yesterday_date: string; today_date: string }; originalPayload?: Record<string, unknown> }
 ) {
   if (clarification) {
@@ -288,11 +318,8 @@ function onFormSaved(
     showAmbiguousModal.value = true
     return
   }
-  waitAndReload().then(() => {
-    if (!editingTransaction.value) {
-      checkDailyBudgetOverrun()
-    }
-  })
+  await waitAndReload()
+  await checkDailyBudgetOverrun()
 }
 
 const totalSpent = computed(() => transactions.value.reduce((s, t) => s + (t.amount ?? 0), 0))
@@ -325,13 +352,13 @@ async function loadTransactions() {
     } else if (filterMode.value === 'range') {
       res = await api.get(`/transactions/range?from=${rangeFromDate.value}&to=${rangeToDate.value}`)
     } else {
-      // cap "all" mode to current month to avoid unbounded payload
       const now = new Date()
       const from = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`
       const to = todayStr
       res = await api.get(`/transactions/range?from=${from}&to=${to}`)
     }
     transactions.value = res.data.data ?? []
+
   } catch (e: unknown) {
     loadError.value = extractError(e, 'Gagal memuat transaksi')
     transactions.value = []
@@ -344,101 +371,122 @@ watch(selectedDate, () => { if (filterMode.value === 'single') loadTransactions(
 watch([rangeFromDate, rangeToDate], () => { if (filterMode.value === 'range') loadTransactions() })
 
 async function checkDailyBudgetOverrun() {
-  if (localStorage.getItem(deficitHandledKey())) return
+  if (showBudgetExceededModal.value || isHandlingOverrun.value) return
+  const myVer = ++_overrunVer
   try {
     const today = toLocaleDateStr(new Date())
-    const res = await api.get(`/daily-budget/${today}`)
-    const data = res.data?.data
-    const dailyBudget = data?.daily_budget ?? data?.total_allocated ?? 0
-    const totalSpentVal = data?.total_spent ?? 0
+    const tomorrow = addDays(today, 1)
+    const [budgetRes, txRes, tomorrowRes] = await Promise.all([
+      api.get(`/daily-budget/${today}`).catch(() => null),
+      api.get(`/transactions/date/${today}`).catch(() => null),
+      api.get(`/daily-budget/${tomorrow}`).catch(() => null),
+    ])
+    const data = budgetRes?.data?.data
+    if (!data) return
+
+    const dailyBudget = data.daily_budget ?? data.total_allocated ?? 0
+    const foodDailyBudget = data.food_daily_budget ?? 0
+    const nonFoodDailyBudget = dailyBudget - foodDailyBudget
+    const totalSpentVal = data.total_spent ?? 0
     const totalDeficit = totalSpentVal - dailyBudget
-    if (totalDeficit > 0) {
-      budgetExceeded.value = { category: '', deficit: totalDeficit }
-      budgetExceededError.value = ''
-      showBudgetExceededModal.value = true
+    if (totalDeficit <= 0) {
+      // Not over budget at all — mark all NULL txs as 'normal' and exit
+      if (myVer !== _overrunVer) return
+      api.patch('/transactions/deficit-choice', { date: today, choice: 'normal', savings_cut: 0 }).catch(() => {})
+      return
     }
-  } catch {}
+
+    const txs: any[] = txRes?.data?.data ?? []
+
+    // Compute already-handled amount: savings cuts already deducted + tomorrow budget already cut
+    const savingsAlreadyCut: number = txs.reduce((s: number, t: any) => s + (t.deficit_savings_cut ?? 0), 0)
+    const tomorrowBudgets: Array<{ category: string; deficit_cut_in?: number }> = tomorrowRes?.data?.data?.budgets ?? []
+    const tomorrowAlreadyCut = tomorrowBudgets
+      .filter((b) => b.category !== 'food')
+      .reduce((s, b) => s + Math.abs(Math.min(b.deficit_cut_in ?? 0, 0)), 0)
+    const incrementalDeficit = Math.max(totalDeficit - savingsAlreadyCut - tomorrowAlreadyCut, 0)
+    if (myVer !== _overrunVer) return
+    // Use 1 rupiah threshold to guard against floating-point near-zero values
+    if (incrementalDeficit < 1) {
+      // No new deficit — silently mark any remaining NULL txs as 'normal' so they
+      // don't trigger the modal again on the next check.
+      api.patch('/transactions/deficit-choice', { date: today, choice: 'normal', savings_cut: 0 }).catch(() => {})
+      return
+    }
+
+    tomorrowCutCapacity.value = Math.max(nonFoodDailyBudget - tomorrowAlreadyCut, 0)
+
+    budgetExceeded.value = { category: '', deficit: incrementalDeficit }
+    budgetExceededError.value = ''
+    showBudgetExceededModal.value = true
+  } catch (e) {
+    console.error('[overrun check] error:', e)
+  }
 }
 
 async function deductFromSavings() {
   if (!budgetExceeded.value) return
   deductingSavings.value = true
+  isHandlingOverrun.value = true
   budgetExceededError.value = ''
+  ++_overrunVer  // Cancel any in-flight overrun check
   try {
-    await api.post('/summary/deduct-savings', { amount: budgetExceeded.value.deficit })
-    localStorage.setItem(deficitHandledKey(), 'true')
+    const today = toLocaleDateStr(new Date())
+    await api.patch('/transactions/deficit-choice', {
+      date: today,
+      choice: 'savings',
+      savings_cut: budgetExceeded.value.deficit,
+    })
     showBudgetExceededModal.value = false
     budgetExceeded.value = null
+    await loadTransactions()
   } catch (e: any) {
     budgetExceededError.value = e.response?.data?.message ?? 'Gagal memotong tabungan. Coba lagi.'
   } finally {
     deductingSavings.value = false
+    isHandlingOverrun.value = false
   }
 }
 
 async function confirmDeficit() {
   if (!budgetExceeded.value) return
   applyingDeficit.value = true
+  isHandlingOverrun.value = true
+  budgetExceededError.value = ''
+  ++_overrunVer  // Cancel any in-flight overrun check
   try {
     const today = toLocaleDateStr(new Date())
-    const tomorrow = addDays(today, 1)
+    const deficit = Math.round(budgetExceeded.value.deficit)
+    // Cap tomorrow cut at non-food capacity; remainder comes from savings (split case)
+    // Use Math.round to avoid floating-point dust (e.g. 0.0001 treated as split)
+    const toCutTomorrow = Math.min(deficit, Math.round(tomorrowCutCapacity.value))
+    const toCutSavings = Math.max(0, deficit - toCutTomorrow)
 
-    const [statusRes, tomorrowRes] = await Promise.all([
-      api.get(`/daily-budget/${today}`),
-      api.get(`/daily-budget/${tomorrow}`),
-    ])
-    const data = statusRes.data?.data
-    const tomorrowBudgets: Array<{ category: string; carryover_in?: number }> = tomorrowRes.data?.data?.budgets ?? []
-
-    const dailyBudget: number = data?.daily_budget ?? 0
-    const foodDailyBudget: number = data?.food_daily_budget ?? 0
-    const nonFoodDailyBudget = dailyBudget - foodDailyBudget
-
-    const incomeNonFoodCarryover = tomorrowBudgets
-      .filter(b => b.category !== 'food')
-      .reduce((s, b) => s + (b.carryover_in ?? 0), 0)
-    const incomeFoodCarryover = tomorrowBudgets.find(b => b.category === 'food')?.carryover_in ?? 0
-
-    const nonFoodCapacity = nonFoodDailyBudget + incomeNonFoodCarryover
-    const foodCapacity = foodDailyBudget + incomeFoodCarryover
-
-    const totalSpentVal: number = data?.total_spent ?? 0
-    const deficit = Math.max(totalSpentVal - dailyBudget, 0)
-    const calls: Promise<unknown>[] = []
-    let remaining = deficit
-
-    if (nonFoodCapacity > 0.01 && remaining > 0.01) {
-      const cutFromNonFood = Math.min(remaining, nonFoodCapacity)
+    if (toCutTomorrow > 0) {
       const nonFoodCats = ['entertainment', 'shopping', 'misc']
-      for (const cat of nonFoodCats) {
-        const cut = cutFromNonFood / nonFoodCats.length
-        if (cut > 0.01) {
-          calls.push(api.post(`/daily-budget/${today}/carryover`, {
-            category: cat,
-            remaining_amount: -cut,
-            action: 'cut_tomorrow',
-          }))
-        }
-      }
-      remaining -= cutFromNonFood
+      await Promise.all(nonFoodCats.map(cat =>
+        api.post(`/daily-budget/${today}/carryover`, {
+          category: cat,
+          remaining_amount: -(toCutTomorrow / nonFoodCats.length),
+          action: 'cut_tomorrow',
+        })
+      ))
     }
 
-    if (remaining > 0.01 && foodCapacity > 0.01) {
-      calls.push(api.post(`/daily-budget/${today}/carryover`, {
-        category: 'food',
-        remaining_amount: -Math.min(remaining, foodCapacity),
-        action: 'cut_tomorrow',
-      }))
-    }
-
-    await Promise.all(calls)
-    localStorage.setItem(deficitHandledKey(), 'true')
+    // Backend deducts toCutSavings from savings when savings_cut > 0
+    await api.patch('/transactions/deficit-choice', {
+      date: today,
+      choice: 'tomorrow',
+      savings_cut: toCutSavings,
+    })
     showBudgetExceededModal.value = false
     budgetExceeded.value = null
+    await loadTransactions()
   } catch (e: any) {
     budgetExceededError.value = e.response?.data?.message ?? 'Gagal memotong budget besok. Coba lagi.'
   } finally {
     applyingDeficit.value = false
+    isHandlingOverrun.value = false
   }
 }
 
@@ -467,9 +515,6 @@ function doExportExcel() {
   exportTransactionsToExcel(transactions.value, label)
 }
 
-function deficitHandledKey() {
-  return `deficit_handled_${toLocaleDateStr(new Date())}`
-}
 
 onMounted(async () => {
   await loadTransactions()

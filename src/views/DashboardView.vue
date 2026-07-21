@@ -13,6 +13,31 @@
     <!-- Error state -->
     <p v-if="loadError" class="text-red-400 text-sm text-center mb-6">Gagal memuat data</p>
 
+    <!-- End-day banner (already finalized) -->
+    <div v-if="endDayChoice" class="rounded-2xl border mb-6 p-4 flex items-center justify-between gap-3"
+      :class="endDayChoice.Action === 'save'
+        ? 'border-emerald-500/30 bg-emerald-500/8'
+        : 'border-cyan-500/30 bg-cyan-500/8'">
+      <div class="flex items-center gap-3">
+        <span class="text-xl">{{ endDayChoice.Action === 'save' ? '🏦' : '📈' }}</span>
+        <div>
+          <p class="text-sm font-bold text-white">
+            {{ endDayChoice.Action === 'save' ? 'Sisa masuk tabungan' : 'Sisa ke budget besok' }}
+          </p>
+          <p class="text-xs text-slate-400 mt-0.5">
+            {{ formatCurrency(endDayChoice.TotalAmount) }} • Hari ini sudah diselesaikan
+          </p>
+          <p v-if="undoError" class="text-xs text-red-400 mt-1">{{ undoError }}</p>
+        </div>
+      </div>
+      <button v-if="canUndoEndDay"
+        @click="undoEndDay"
+        :disabled="undoing"
+        class="text-xs font-semibold text-slate-400 hover:text-white border border-white/10 hover:border-white/20 px-3 py-1.5 rounded-lg transition-all flex-shrink-0">
+        {{ undoing ? '...' : 'Batalkan' }}
+      </button>
+    </div>
+
     <!-- Budget hero card -->
     <DailyBudgetCard
       :budget="budgetPlan"
@@ -80,17 +105,32 @@
           </div>
         </RouterLink>
       </div>
+
+      <!-- Sudahi Hari Ini button -->
+      <button v-if="canEndDay"
+        @click="triggerEndOfDay"
+        class="mt-3 w-full glass-card p-4 flex items-center gap-3 hover:border-emerald-500/30 hover:-translate-y-0.5 transition-all group text-left">
+        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0 bg-amber-500/15">
+          🌙
+        </div>
+        <div>
+          <p class="font-semibold text-white text-sm group-hover:text-amber-300 transition-colors">Sudahi Hari Ini</p>
+          <p class="text-slate-500 text-xs mt-0.5">Simpan sisa budget hari ini</p>
+        </div>
+      </button>
     </div>
 
-    <!-- Carryover modal -->
+    <!-- End-day modal -->
     <CarryoverModal
-      :model-value="showCarryoverModal"
-      :carryover-items="carryoverItems"
-      :loading="submittingCarryover"
-      :yesterday-label="yesterdayLabel"
-      @update:model-value="showCarryoverModal = $event"
-      @confirm="submitCarryover"
-      @set-choice="setChoice"
+      :model-value="showEndDayModal"
+      :total="endDayTotal"
+      :choice="endDayAction"
+      :loading="submittingEndDay"
+      :error="endDayError"
+      :yesterday-label="todayLabel"
+      @update:model-value="showEndDayModal = $event"
+      @update:choice="endDayAction = $event"
+      @confirm="submitEndDay"
     />
 
     <!-- Today's transactions -->
@@ -160,7 +200,6 @@ import BudgetHistoryChart from '@/components/BudgetHistoryChart.vue'
 import DailyBudgetCard from '@/components/dashboard/DailyBudgetCard.vue'
 import TomorrowPreview from '@/components/dashboard/TomorrowPreview.vue'
 import CarryoverModal from '@/components/dashboard/CarryoverModal.vue'
-import { CATEGORIES } from '@/constants/categories'
 import { BUDGET_THRESHOLDS, SAVING_TYPES } from '@/constants/budgetConfig'
 import type { DailyStatus, BudgetPlan, Transaction, BudgetTrackerItem } from '@/types'
 
@@ -188,7 +227,6 @@ const foodAllocated = computed(() => {
   const plan = budgetPlan.value
   if (!plan) return 0
   const midCycleDays = plan.mid_cycle_days ?? 0
-  // prefer mid_cycle_days from plan; only fallback to local date calc if plan has no cycle info
   const days = midCycleDays > 0
     ? midCycleDays
     : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()
@@ -223,28 +261,82 @@ const displayAllocated = computed(() => {
 })
 const displaySpent = computed(() => dailyStatus.value?.total_spent ?? 0)
 
-// ── Carryover ────────────────────────────────────────────────────
-interface CarryoverItem { category: string; remaining: number; choice: string }
-const carryoverItems = ref<CarryoverItem[]>([])
-const showCarryoverModal = computed({
-  get: () => carryoverItems.value.length > 0,
-  set: (val: boolean) => { if (!val) carryoverItems.value = [] },
-})
-const submittingCarryover = ref(false)
-const carryoverError = ref('')
+// ── End-day state (from DB) ───────────────────────────────────────
+interface EndDayChoice { Action: string; TotalAmount: number }
+const endDayChoice = ref<EndDayChoice | null>(null)
 
-// Updated per loadDashboard call so stale-past-midnight is not an issue
+const showEndDayModal = ref(false)
+const endDayAction = ref('')
+const endDayTotal = ref(0)
+const submittingEndDay = ref(false)
+const endDayError = ref('')
+const undoError = ref('')
+const undoing = ref(false)
+
+const todayStr = ref('')
+const todayLabel = ref('')
 const yesterdayStr = ref('')
-const yesterdayLabel = ref('')
+const tomorrowStr = ref('')
+const tomorrowLabel = ref('')
+const tomorrowDay = ref(0)
 
-function setChoice(category: string, action: string) {
-  const item = carryoverItems.value.find(i => i.category === category)
-  if (item) item.choice = action
+const totalRemaining = computed(() => dailyStatus.value?.total_remaining ?? 0)
+
+const canEndDay = computed(() => {
+  if (endDayChoice.value) return false
+  return totalRemaining.value > 0
+})
+
+const canUndoEndDay = computed(() => {
+  const hour = new Date().getHours()
+  return !!endDayChoice.value && hour < 22
+})
+
+function triggerEndOfDay() {
+  endDayTotal.value = totalRemaining.value
+  endDayAction.value = ''
+  endDayError.value = ''
+  showEndDayModal.value = true
+}
+
+async function submitEndDay() {
+  if (!endDayAction.value) return
+  submittingEndDay.value = true
+  endDayError.value = ''
+  try {
+    await api.post(`/daily-budget/${todayStr.value}/end-day`, {
+      action: endDayAction.value,
+      total_remaining: endDayTotal.value,
+    })
+    showEndDayModal.value = false
+    await loadDashboard()
+  } catch (e: any) {
+    endDayError.value = e?.response?.data?.message ?? 'Gagal menyimpan. Coba lagi.'
+  } finally {
+    submittingEndDay.value = false
+  }
+}
+
+async function undoEndDay() {
+  undoing.value = true
+  undoError.value = ''
+  try {
+    await api.post(`/daily-budget/${todayStr.value}/undo-end-day`)
+    await loadDashboard()
+  } catch (e: any) {
+    undoError.value = e?.response?.data?.message ?? 'Gagal membatalkan.'
+  } finally {
+    undoing.value = false
+  }
 }
 
 async function checkYesterdayCarryover() {
   if (!yesterdayStr.value) return
   try {
+    // Check if already finalized (end-day done) for yesterday
+    const statusRes = await api.get(`/daily-budget/${yesterdayStr.value}/end-day-status`).catch(() => null)
+    if (statusRes?.data?.data) return // already processed
+
     const res = await api.get(`/daily-budget/${yesterdayStr.value}`)
     const budgets = (res.data.data?.budgets ?? []) as BudgetTrackerItem[]
     const pending = budgets.filter(b => !b.is_finalized && b.remaining > 0)
@@ -253,56 +345,19 @@ async function checkYesterdayCarryover() {
     const hour = new Date().getHours()
     const inWindow = hour >= 22 || hour < 6
 
-    if (inWindow) {
-      carryoverItems.value = pending.map(b => ({ category: b.category, remaining: b.remaining, choice: '' }))
-    } else {
-      await Promise.all(
-        pending.map(b =>
-          api.post(`/daily-budget/${yesterdayStr.value}/carryover`, {
-            category: b.category,
-            remaining_amount: b.remaining,
-            action: 'save',
-          })
-        )
-      )
+    if (!inWindow) {
+      // Auto-save outside window via end-day endpoint
+      const totalRem = pending.reduce((s, b) => s + b.remaining, 0)
+      await api.post(`/daily-budget/${yesterdayStr.value}/end-day`, {
+        action: 'save',
+        total_remaining: totalRem,
+      })
       await loadDashboard()
     }
   } catch (e) {
     console.error('checkYesterdayCarryover error', e)
   }
 }
-
-async function submitCarryover() {
-  const incomplete = carryoverItems.value.find(i => !i.choice)
-  if (incomplete) {
-    carryoverError.value = 'Pilih opsi untuk semua kategori terlebih dahulu'
-    return
-  }
-  carryoverError.value = ''
-  submittingCarryover.value = true
-  try {
-    await Promise.all(
-      carryoverItems.value.map(item =>
-        api.post(`/daily-budget/${yesterdayStr.value}/carryover`, {
-          category: item.category,
-          remaining_amount: item.remaining,
-          action: item.choice,
-        })
-      )
-    )
-    carryoverItems.value = []
-    await loadDashboard()
-  } catch (e) {
-    console.error('submitCarryover error', e)
-    carryoverError.value = 'Gagal menyimpan. Coba lagi.'
-  } finally {
-    submittingCarryover.value = false
-  }
-}
-
-const todayDate = ref(new Date().toLocaleDateString('id-ID', {
-  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-}))
 
 const firstName = computed(() => auth.user?.username?.split(' ')[0] ?? 'Pengguna')
 
@@ -320,10 +375,25 @@ const quickActions = [
 ]
 
 // ── Tomorrow budget preview ───────────────────────────────────────
-// Computed fresh each loadDashboard call to avoid stale-past-midnight
-const tomorrowStr = ref('')
-const tomorrowLabel = ref('')
-const tomorrowDay = ref(0)
+const tomorrowIsNewCycle = computed(() =>
+  paydayDay.value > 0 && tomorrowDay.value === paydayDay.value
+)
+
+const nextCycleMandatory = ref(0)
+
+const nextCycleDailyBudget = computed(() => {
+  const pd = pdStore.data
+  if (!pd) return null
+  const salary = pd.salary ?? 0
+  if (!salary) return null
+  const savingType = (pd.saving_type ?? 'recommendation').toLowerCase()
+  const spend = SAVING_TYPES[savingType]?.spend ?? 0.6
+  const available = salary - nextCycleMandatory.value
+  if (!tomorrowStr.value) return null
+  const td = new Date(tomorrowStr.value)
+  const daysInMonth = new Date(td.getFullYear(), td.getMonth() + 1, 0).getDate()
+  return available > 0 ? Math.round((available * spend) / daysInMonth) : null
+})
 
 function calcTomorrowSummary(plan: BudgetPlan | null, tomorrowStatusVal: DailyStatus | null) {
   const dailyBudget = plan?.daily_budget ?? 0
@@ -346,8 +416,6 @@ function calcTomorrowSummary(plan: BudgetPlan | null, tomorrowStatusVal: DailySt
     .filter(b => b.category !== 'food')
     .reduce((s, b) => s + (b.carryover_in ?? 0) + (b.deficit_cut_in ?? 0), 0)
 
-  const totalCut = foodCarryover + othersCarryover
-
   const foodEffective = foodAlloc + foodCarryover
   const othersEffectiveRaw = othersAllocated + othersCarryover
   const othersEffective = Math.max(othersEffectiveRaw, 0)
@@ -364,43 +432,27 @@ function calcTomorrowSummary(plan: BudgetPlan | null, tomorrowStatusVal: DailySt
     totalAllocated: dailyBudget,
     totalCut: netCut,
     totalEffective,
-    hasAdjustment: totalCut !== 0,
+    hasAdjustment: netCut !== 0,
     hasData: true,
   }
 }
 
-const tomorrowIsNewCycle = computed(() =>
-  paydayDay.value > 0 && tomorrowDay.value === paydayDay.value
-)
-
-const nextCycleMandatory = ref(0)
-
-const nextCycleDailyBudget = computed(() => {
-  const pd = pdStore.data
-  if (!pd) return null
-  const salary = pd.salary ?? 0
-  if (!salary) return null
-  const savingType = (pd.saving_type ?? 'recommendation').toLowerCase()
-  const spend = SAVING_TYPES[savingType]?.spend ?? 0.6
-  const available = salary - nextCycleMandatory.value
-  if (!tomorrowStr.value) return null
-  const td = new Date(tomorrowStr.value)
-  const daysInMonth = new Date(td.getFullYear(), td.getMonth() + 1, 0).getDate()
-  return available > 0 ? Math.round((available * spend) / daysInMonth) : null
-})
-
 const tomorrowSummary = computed(() => calcTomorrowSummary(budgetPlan.value, tomorrowStatus.value))
+
+const todayDate = ref(new Date().toLocaleDateString('id-ID', {
+  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+}))
 
 async function loadDashboard() {
   loadError.value = false
   const now = new Date()
 
-  // Recompute date strings fresh each call (guards against stale-past-midnight)
   todayDate.value = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-  const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+
+  todayStr.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+  todayLabel.value = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })
   const yd = new Date(now); yd.setDate(yd.getDate() - 1)
   yesterdayStr.value = `${yd.getFullYear()}-${String(yd.getMonth()+1).padStart(2,'0')}-${String(yd.getDate()).padStart(2,'0')}`
-  yesterdayLabel.value = yd.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })
   const tm = new Date(now); tm.setDate(tm.getDate() + 1)
   tomorrowStr.value = `${tm.getFullYear()}-${String(tm.getMonth()+1).padStart(2,'0')}-${String(tm.getDate()).padStart(2,'0')}`
   tomorrowLabel.value = tm.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -408,14 +460,14 @@ async function loadDashboard() {
 
   try {
     await pdStore.fetch()
-    const [statusRes, txRes, planRes, tomorrowRes, mandatoryRes] = await Promise.all([
-      api.get(`/daily-budget/${today}`).catch(() => null),
+    const [statusRes, txRes, planRes, tomorrowRes, mandatoryRes, endDayStatusRes] = await Promise.all([
+      api.get(`/daily-budget/${todayStr.value}`).catch(() => null),
       api.get('/transactions/today').catch(() => null),
       api.get(`/budget-plan/${now.getMonth()+1}/${now.getFullYear()}`).catch(() => null),
       api.get(`/daily-budget/${tomorrowStr.value}`).catch(() => null),
       api.get(`/mandatory-expenditure/month/${now.getMonth()+1}/${now.getFullYear()}`).catch(() => null),
+      api.get(`/daily-budget/${todayStr.value}/end-day-status`).catch(() => null),
     ])
-    // Show error only if the critical plan request failed
     if (!planRes) loadError.value = true
     dailyStatus.value = statusRes?.data?.data ?? null
     todayTx.value = txRes?.data?.data ?? []
@@ -423,6 +475,7 @@ async function loadDashboard() {
     tomorrowStatus.value = tomorrowRes?.data?.data ?? null
     paydayDay.value = pdStore.data?.payday_day ?? 0
     nextCycleMandatory.value = mandatoryRes?.data?.data?.total ?? 0
+    endDayChoice.value = endDayStatusRes?.data?.data ?? null
   } catch {
     loadError.value = true
   } finally {

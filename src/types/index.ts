@@ -23,6 +23,7 @@ export interface DailyStatus {
   date: string
   total_allocated: number
   total_spent: number
+  total_remaining: number
   budgets: BudgetTrackerItem[]
 }
 
@@ -36,6 +37,8 @@ export interface Transaction {
   assigned_date: string
   created_at: string
   type?: string
+  deficit_choice?: string
+  deficit_savings_cut?: number
 }
 
 export interface Income {

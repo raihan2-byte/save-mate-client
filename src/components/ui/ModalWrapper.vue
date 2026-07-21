@@ -4,7 +4,7 @@
       <div
         v-if="modelValue"
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-        @click.self="close"
+        @click.self="!persistent && close()"
       >
         <Transition name="modal-slide">
           <div
@@ -25,8 +25,10 @@ import { onMounted, onUnmounted } from 'vue'
 const props = withDefaults(defineProps<{
   modelValue: boolean
   maxWidth?: string
+  persistent?: boolean
 }>(), {
   maxWidth: 'max-w-md',
+  persistent: false,
 })
 
 const emit = defineEmits<{
@@ -38,7 +40,7 @@ function close() {
 }
 
 function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && props.modelValue) close()
+  if (e.key === 'Escape' && props.modelValue && !props.persistent) close()
 }
 
 onMounted(() => window.addEventListener('keydown', onKeydown))
