@@ -1,3 +1,4 @@
-export function extractError(e: any, fallback = 'Terjadi kesalahan'): string {
-  return e?.response?.data?.errors ?? e?.response?.data?.message ?? fallback
+export function extractError(e: unknown, fallback = 'Terjadi kesalahan'): string {
+  const err = e as { response?: { data?: { errors?: string; message?: string } } }
+  return err?.response?.data?.errors ?? err?.response?.data?.message ?? fallback
 }

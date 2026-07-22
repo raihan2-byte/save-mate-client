@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '@/api'
+import type { User } from '@/types'
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem('token'))
-  const user = ref<any>(null)
+  const user = ref<User | null>(null)
   const hasPersonalData = ref<boolean | null>(null)
 
   const isLoggedIn = computed(() => !!token.value)
@@ -23,15 +24,16 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function fetchMe() {
     const res = await api.get('/user/me')
-    user.value = res.data.data
+    user.value = res.data.data as User
   }
 
   async function checkPersonalData() {
     try {
       await api.get('/personal-data/')
       hasPersonalData.value = true
-    } catch (e: any) {
-      if (e?.response?.status === 404) {
+    } catch (e: unknown) {
+      const err = e as { response?: { status?: number } }
+      if (err?.response?.status === 404) {
         hasPersonalData.value = false
       }
       // non-404 (auth error, server error) — leave hasPersonalData as-is
