@@ -187,8 +187,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import api from '@/api'
 import { useCurrencyInput } from '@/composables/useCurrencyInput'
+import { usePersonalDataStore } from '@/stores/personalData'
+import { useIncome } from '@/composables/useIncome'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import ModalWrapper from '@/components/ui/ModalWrapper.vue'
 import AppButton from '@/components/ui/AppButton.vue'
@@ -197,70 +198,31 @@ import LoadingSkeleton from '@/components/ui/LoadingSkeleton.vue'
 import IncomeItem from '@/components/income/IncomeItem.vue'
 import IncomeChoiceModal from '@/components/income/IncomeChoiceModal.vue'
 import { formatCurrency, toLocaleDateStr, addDays as addDaysUtil } from '@/utils/formatting'
-import { usePersonalDataStore } from '@/stores/personalData'
 import type { Income } from '@/types/index'
 import { Loader2 } from 'lucide-vue-next'
 
-const incomes = ref<Income[]>([])
-const loading = ref(true)
-const showModal = ref(false)
-const showChoiceModal = ref(false)
-const submitting = ref(false)
-const error = ref('')
-const choiceError = ref('')
-const selectedChoice = ref('')
-const { displayValue: amountDisplay, numericValue: amountValue, reset: resetAmount } = useCurrencyInput()
-const form = ref({ description: '', date: new Date().toISOString().split('T')[0] })
-
-// Delete state
-const showDeleteModal = ref(false)
-const deletingIncomeId = ref('')
-const deleteLoading = ref(false)
-const recalculating = ref(false)
-const deleteError = ref('')
+const {
+  incomes, loading, submitting, deleteLoading, recalculating,
+  error, choiceError, deleteError,
+  loadIncomes, confirmDelete: doConfirmDelete, handleChoiceConfirm: doChoiceConfirm,
+} = useIncome()
 
 const pdStore = usePersonalDataStore()
+const { displayValue: amountDisplay, numericValue: amountValue, reset: resetAmount } = useCurrencyInput()
 
-// Pending form data waiting for choice
-const pendingIncome = ref<Income | null>(null)
+const showModal = ref(false)
+const showChoiceModal = ref(false)
+const showDeleteModal = ref(false)
+const deletingIncomeId = ref('')
+const selectedChoice = ref('')
 const selectedSpreadDays = ref(0)
 const daysLeftInCycle = ref(30)
-
-const cycleInfo = computed(() => ({
-  daysLeft: daysLeftInCycle.value,
-  nextPayday: '',
-}))
-
-async function waitAndReload() {
-  recalculating.value = true
-  await new Promise(r => setTimeout(r, 500))
-  await loadIncomes()
-  recalculating.value = false
-}
-
-function deleteIncome(incomeId: string) {
-  deletingIncomeId.value = incomeId
-  showDeleteModal.value = true
-}
-
-async function confirmDelete() {
-  deleteLoading.value = true
-  deleteError.value = ''
-  try {
-    await api.delete(`/daily-income/${deletingIncomeId.value}`)
-    showDeleteModal.value = false
-    await waitAndReload()
-  } catch (e: any) {
-    deleteError.value = e.response?.data?.message ?? 'Gagal menghapus pemasukan'
-  } finally {
-    deleteLoading.value = false
-  }
-}
+const form = ref({ description: '', date: new Date().toISOString().split('T')[0] })
+const pendingIncome = ref<Income | null>(null)
 
 const todayStr = toLocaleDateStr(new Date())
 function addDays(s: string, days: number) { return addDaysUtil(s, days) }
 
-// ── Filter state ──────────────────────────────────────────────
 type FilterMode = 'single' | 'range' | 'all'
 const filterMode = ref<FilterMode>('single')
 const modes: { value: FilterMode; label: string }[] = [
@@ -268,58 +230,37 @@ const modes: { value: FilterMode; label: string }[] = [
   { value: 'range',  label: 'Rentang' },
   { value: 'all',    label: 'Semua' },
 ]
-
 const filterDate = ref(todayStr)
 const rangeFromDate = ref(addDays(todayStr, -6))
 const rangeToDate = ref(todayStr)
-
 const isLatestDay = computed(() => filterDate.value >= todayStr)
-
 const dateLabel = computed(() => {
-  const [y, m, d] = filterDate.value.split('-').map(Number)
-  const date = new Date(y, m - 1, d)
   if (filterDate.value === todayStr) return 'Hari Ini'
   if (filterDate.value === addDays(todayStr, -1)) return 'Kemarin'
-  return date.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })
+  const [y, m, d] = filterDate.value.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })
 })
-
 const rangeLabel = computed(() => {
-  const fmt = (s: string) => {
-    const [y, m, d] = s.split('-').map(Number)
-    return new Date(y, m - 1, d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
-  }
+  const fmt = (s: string) => { const [y,m,d] = s.split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) }
   return `${fmt(rangeFromDate.value)} – ${fmt(rangeToDate.value)}`
 })
-
 function prevDay() { filterDate.value = addDays(filterDate.value, -1) }
 function nextDay() { if (!isLatestDay.value) filterDate.value = addDays(filterDate.value, 1) }
-
 function shiftRange(dir: number) {
-  const days = Math.max(1, Math.round(
-    (new Date(rangeToDate.value).getTime() - new Date(rangeFromDate.value).getTime()) / 86400000
-  ) + 1)
+  const days = Math.max(1, Math.round((new Date(rangeToDate.value).getTime() - new Date(rangeFromDate.value).getTime()) / 86400000) + 1)
   const newFrom = addDays(rangeFromDate.value, dir * days)
   const newTo = addDays(rangeToDate.value, dir * days)
   if (newTo > todayStr) return
-  rangeFromDate.value = newFrom
-  rangeToDate.value = newTo
+  rangeFromDate.value = newFrom; rangeToDate.value = newTo
 }
-
 function setMode(m: FilterMode) { filterMode.value = m }
 
 const filteredIncomes = computed(() => {
   if (filterMode.value === 'all') return incomes.value
-  if (filterMode.value === 'single') {
-    return incomes.value.filter(i => (i.transaction_date?.split('T')[0] ?? '') === filterDate.value)
-  }
-  return incomes.value.filter(i => {
-    const d = i.transaction_date?.split('T')[0] ?? ''
-    return d >= rangeFromDate.value && d <= rangeToDate.value
-  })
+  if (filterMode.value === 'single') return incomes.value.filter(i => (i.transaction_date?.split('T')[0] ?? '') === filterDate.value)
+  return incomes.value.filter(i => { const d = i.transaction_date?.split('T')[0] ?? ''; return d >= rangeFromDate.value && d <= rangeToDate.value })
 })
-
 const totalIncome = computed(() => filteredIncomes.value.reduce((s, i) => s + (i.amount ?? 0), 0))
-
 const groupedIncomes = computed(() => {
   if (filterMode.value === 'single') return {} as Record<string, Income[]>
   const groups: Record<string, Income[]> = {}
@@ -332,34 +273,21 @@ const groupedIncomes = computed(() => {
 })
 
 function openModal() {
-  resetAmount()
-  form.value = { description: '', date: new Date().toISOString().split('T')[0] }
-  error.value = ''
-  showModal.value = true
+  resetAmount(); form.value = { description: '', date: new Date().toISOString().split('T')[0] }; error.value = ''; showModal.value = true
 }
-
 function formatDateGroup(dateStr: string) {
   if (dateStr === todayStr) return 'Hari Ini'
   if (dateStr === addDays(todayStr, -1)) return 'Kemarin'
   const [y, m, d] = dateStr.split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
-
-async function loadIncomes() {
-  loading.value = true
-  try {
-    const res = await api.get('/daily-income/')
-    const raw = res.data.data
-    incomes.value = Array.isArray(raw) ? raw : (raw ? [raw] : [])
-  } catch { incomes.value = [] }
-  finally { loading.value = false }
+function deleteIncome(incomeId: string) { deletingIncomeId.value = incomeId; showDeleteModal.value = true }
+async function confirmDelete() {
+  const ok = await doConfirmDelete(deletingIncomeId.value)
+  if (ok) showDeleteModal.value = false
 }
-
 function handleSubmitForm() {
-  if (!amountValue.value || amountValue.value <= 0) {
-    error.value = 'Masukkan jumlah yang valid'
-    return
-  }
+  if (!amountValue.value || amountValue.value <= 0) { error.value = 'Masukkan jumlah yang valid'; return }
   pendingIncome.value = {
     daily_income_id: '',
     amount: amountValue.value,
@@ -367,61 +295,29 @@ function handleSubmitForm() {
     transaction_date: form.value.date,
     choice: '',
   }
-  selectedChoice.value = ''
-  choiceError.value = ''
-  showModal.value = false
-  showChoiceModal.value = true
+  selectedChoice.value = ''; choiceError.value = ''; showModal.value = false; showChoiceModal.value = true
 }
-
 async function handleChoiceConfirm(choice: string, spreadDays?: number) {
-  submitting.value = true
   selectedChoice.value = choice
   if (spreadDays !== undefined) selectedSpreadDays.value = spreadDays
-  choiceError.value = ''
-  try {
-    await api.post('/daily-income/with-choice', {
-      amount: pendingIncome.value?.amount,
-      description: pendingIncome.value?.description,
-      transaction_date: (pendingIncome.value?.transaction_date ?? '') + 'T00:00:00Z',
-      choice,
-      ...(choice === 'spread' && spreadDays !== undefined ? { spread_days: spreadDays } : {}),
-    })
-    showChoiceModal.value = false
-    await loadIncomes()
-  } catch (e: any) {
-    choiceError.value = e.response?.data?.errors ?? e.response?.data?.message ?? 'Gagal menyimpan'
-  } finally {
-    submitting.value = false
-    selectedChoice.value = ''
-    selectedSpreadDays.value = 0
-  }
+  const ok = await doChoiceConfirm(pendingIncome.value, choice, spreadDays)
+  if (ok) { showChoiceModal.value = false; pendingIncome.value = null }
 }
 
-async function loadCycleInfo() {
-  try {
+const cycleInfo = computed(() => ({ daysLeft: daysLeftInCycle.value, nextPayday: '' }))
+
+onMounted(async () => {
+  await pdStore.fetch()
+  const pd = pdStore.data
+  if (pd?.payday_day) {
     const now = new Date()
-    await pdStore.fetch()
-    const planRes = await api.get(`/budget-plan/${now.getMonth() + 1}/${now.getFullYear()}`).catch(() => null)
-    const plan = planRes?.data?.data ?? null
-    const paydayDay = pdStore.data?.payday_day ?? 1
-    const today = now.getDate()
-    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-
-    // mid_cycle_days = total days in this cycle; use payday math for remaining days
-    if ((plan?.mid_cycle_days ?? 0) > 0) {
-      const daysLeft = today < paydayDay
-        ? paydayDay - today
-        : (lastDay - today) + paydayDay
-      daysLeftInCycle.value = Math.max(1, daysLeft)
-    } else {
-      daysLeftInCycle.value = today <= paydayDay
-        ? paydayDay - today
-        : (lastDay - today) + paydayDay
-    }
-  } catch {}
-}
-
-onMounted(() => { loadIncomes(); loadCycleInfo() })
+    const payday = pd.payday_day
+    const nextPayday = new Date(now.getFullYear(), now.getMonth(), payday)
+    if (nextPayday <= now) nextPayday.setMonth(nextPayday.getMonth() + 1)
+    daysLeftInCycle.value = Math.ceil((nextPayday.getTime() - now.getTime()) / 86400000)
+  }
+  await loadIncomes()
+})
 </script>
 
 <style scoped>
