@@ -190,304 +190,41 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated } from 'vue'
+import { onMounted, onActivated } from 'vue'
 import { RouterLink } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { usePersonalDataStore } from '@/stores/personalData'
-import api from '@/api'
 import { formatCurrency, formatCurrencyShort } from '@/utils/formatting'
+import { checkReset } from '@/services/plan.service'
 import BudgetHistoryChart from '@/components/BudgetHistoryChart.vue'
 import DailyBudgetCard from '@/components/dashboard/DailyBudgetCard.vue'
 import TomorrowPreview from '@/components/dashboard/TomorrowPreview.vue'
 import CarryoverModal from '@/components/dashboard/CarryoverModal.vue'
-import { BUDGET_THRESHOLDS, SAVING_TYPES } from '@/constants/budgetConfig'
-import type { DailyStatus, BudgetPlan, Transaction, BudgetTrackerItem } from '@/types'
+import { useDashboard } from '@/composables/useDashboard'
+import { useEndDay } from '@/composables/useEndDay'
 
-const auth = useAuthStore()
-const pdStore = usePersonalDataStore()
+const {
+  dailyStatus, budgetPlan, todayTx, tomorrowStatus,
+  loadingTx, loadError, paydayDay, endDayChoice,
+  todayStr, todayDate, todayLabel, yesterdayStr, tomorrowStr, tomorrowLabel, tomorrowDay,
+  firstName, foodTracker, lifestyleTracker,
+  foodAllocated, foodSpent, foodRemaining, foodUsedPct,
+  foodBadgeClass, foodBadgeText, foodBarClass,
+  displayAllocated, displaySpent, totalRemaining,
+  tomorrowIsNewCycle, nextCycleDailyBudget, tomorrowSummary,
+  summaryStats, quickActions,
+  loadDashboard,
+} = useDashboard()
 
-const dailyStatus = ref<DailyStatus | null>(null)
-const budgetPlan = ref<BudgetPlan | null>(null)
-const todayTx = ref<Transaction[]>([])
-const tomorrowStatus = ref<DailyStatus | null>(null)
-const loadingTx = ref(true)
-const loadError = ref(false)
-const paydayDay = ref(0)
-
-// Food budget
-const foodTracker = computed<BudgetTrackerItem | undefined>(() =>
-  dailyStatus.value?.budgets?.find(b => b.category === 'food')
-)
-const lifestyleTracker = computed<BudgetTrackerItem | undefined>(() =>
-  dailyStatus.value?.budgets?.find(b => b.category !== 'food')
-)
-
-const foodAllocated = computed(() => {
-  if (foodTracker.value) return foodTracker.value.allocated_amount + (foodTracker.value.carryover_in ?? 0)
-  const plan = budgetPlan.value
-  if (!plan) return 0
-  const midCycleDays = plan.mid_cycle_days ?? 0
-  const days = midCycleDays > 0
-    ? midCycleDays
-    : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()
-  return (plan.food_amount ?? 0) / days
-})
-const foodSpent = computed(() => foodTracker.value?.actual_spent ?? 0)
-const foodRemaining = computed(() => foodAllocated.value - foodSpent.value)
-const foodUsedPct = computed(() => foodAllocated.value > 0 ? (foodSpent.value / foodAllocated.value) * 100 : 0)
-
-const foodBadgeClass = computed(() => {
-  if (foodRemaining.value < 0) return 'bg-red-500/15 text-red-400'
-  if (foodRemaining.value < foodAllocated.value * 0.2) return 'bg-yellow-500/15 text-yellow-400'
-  return 'bg-emerald-500/15 text-emerald-400'
-})
-
-const foodBadgeText = computed(() =>
-  foodRemaining.value < 0 ? 'Over budget' : 'Sisa ' + formatCurrencyShort(foodRemaining.value)
-)
-
-const foodBarClass = computed(() => {
-  if (foodUsedPct.value > BUDGET_THRESHOLDS.critical) return 'bg-red-400'
-  if (foodUsedPct.value > BUDGET_THRESHOLDS.warning) return 'bg-yellow-400'
-  return 'bg-emerald-400'
-})
-
-// daily_budget dari plan + carryover hari ini
-const displayAllocated = computed(() => {
-  const base = budgetPlan.value?.daily_budget ?? 0
-  const totalCarryover = (dailyStatus.value?.budgets ?? [])
-    .reduce((s, b) => s + (b.carryover_in ?? 0), 0)
-  return base + totalCarryover
-})
-const displaySpent = computed(() => dailyStatus.value?.total_spent ?? 0)
-
-// ── End-day state (from DB) ───────────────────────────────────────
-interface EndDayChoice { Action: string; TotalAmount: number }
-const endDayChoice = ref<EndDayChoice | null>(null)
-
-const showEndDayModal = ref(false)
-const endDayAction = ref('')
-const endDayTotal = ref(0)
-const submittingEndDay = ref(false)
-const endDayError = ref('')
-const undoError = ref('')
-const undoing = ref(false)
-
-const todayStr = ref('')
-const todayLabel = ref('')
-const yesterdayStr = ref('')
-const tomorrowStr = ref('')
-const tomorrowLabel = ref('')
-const tomorrowDay = ref(0)
-
-const totalRemaining = computed(() => dailyStatus.value?.total_remaining ?? 0)
-
-const canEndDay = computed(() => {
-  if (endDayChoice.value) return false
-  return totalRemaining.value > 0
-})
-
-const canUndoEndDay = computed(() => {
-  const hour = new Date().getHours()
-  return !!endDayChoice.value && hour < 22
-})
-
-function triggerEndOfDay() {
-  endDayTotal.value = totalRemaining.value
-  endDayAction.value = ''
-  endDayError.value = ''
-  showEndDayModal.value = true
-}
-
-async function submitEndDay() {
-  if (!endDayAction.value) return
-  submittingEndDay.value = true
-  endDayError.value = ''
-  try {
-    await api.post(`/daily-budget/${todayStr.value}/end-day`, {
-      action: endDayAction.value,
-      total_remaining: endDayTotal.value,
-    })
-    showEndDayModal.value = false
-    await loadDashboard()
-  } catch (e: any) {
-    endDayError.value = e?.response?.data?.message ?? 'Gagal menyimpan. Coba lagi.'
-  } finally {
-    submittingEndDay.value = false
-  }
-}
-
-async function undoEndDay() {
-  undoing.value = true
-  undoError.value = ''
-  try {
-    await api.post(`/daily-budget/${todayStr.value}/undo-end-day`)
-    await loadDashboard()
-  } catch (e: any) {
-    undoError.value = e?.response?.data?.message ?? 'Gagal membatalkan.'
-  } finally {
-    undoing.value = false
-  }
-}
-
-async function checkYesterdayCarryover() {
-  if (!yesterdayStr.value) return
-  try {
-    // Check if already finalized (end-day done) for yesterday
-    const statusRes = await api.get(`/daily-budget/${yesterdayStr.value}/end-day-status`).catch(() => null)
-    if (statusRes?.data?.data) return // already processed
-
-    const res = await api.get(`/daily-budget/${yesterdayStr.value}`)
-    const budgets = (res.data.data?.budgets ?? []) as BudgetTrackerItem[]
-    const pending = budgets.filter(b => !b.is_finalized && b.remaining > 0)
-    if (pending.length === 0) return
-
-    const hour = new Date().getHours()
-    const inWindow = hour >= 22 || hour < 6
-
-    if (!inWindow) {
-      // Auto-save outside window via end-day endpoint
-      const totalRem = pending.reduce((s, b) => s + b.remaining, 0)
-      await api.post(`/daily-budget/${yesterdayStr.value}/end-day`, {
-        action: 'save',
-        total_remaining: totalRem,
-      })
-      await loadDashboard()
-    }
-  } catch (e) {
-    console.error('checkYesterdayCarryover error', e)
-  }
-}
-
-const firstName = computed(() => auth.user?.username?.split(' ')[0] ?? 'Pengguna')
-
-const summaryStats = computed(() => [
-  { icon: '⬇️', value: formatCurrency(displaySpent.value), label: 'Terpakai' },
-  { icon: '📅', value: formatCurrency(displayAllocated.value), label: 'Budget/Hari' },
-  { icon: '💳', value: todayTx.value.length + 'x', label: 'Transaksi' },
-])
-
-const quickActions = [
-  { to: '/app/transactions', icon: '➕', label: 'Tambah Transaksi', sub: 'Catat pengeluaran', bg: 'bg-emerald-500/15' },
-  { to: '/app/budget',       icon: '📊', label: 'Budget Plan',      sub: 'Lihat rencana',    bg: 'bg-cyan-500/15' },
-  { to: '/app/income',       icon: '💰', label: 'Pemasukan',        sub: 'Kelola income',    bg: 'bg-violet-500/15' },
-  { to: '/app/summary',      icon: '📈', label: 'Ringkasan',        sub: 'Laporan bulanan',  bg: 'bg-orange-500/15' },
-]
-
-// ── Tomorrow budget preview ───────────────────────────────────────
-const tomorrowIsNewCycle = computed(() =>
-  paydayDay.value > 0 && tomorrowDay.value === paydayDay.value
-)
-
-const nextCycleMandatory = ref(0)
-
-const nextCycleDailyBudget = computed(() => {
-  const pd = pdStore.data
-  if (!pd) return null
-  const salary = pd.salary ?? 0
-  if (!salary) return null
-  const savingType = (pd.saving_type ?? 'recommendation').toLowerCase()
-  const spend = SAVING_TYPES[savingType]?.spend ?? 0.6
-  const available = salary - nextCycleMandatory.value
-  if (!tomorrowStr.value) return null
-  const td = new Date(tomorrowStr.value)
-  const daysInMonth = new Date(td.getFullYear(), td.getMonth() + 1, 0).getDate()
-  return available > 0 ? Math.round((available * spend) / daysInMonth) : null
-})
-
-function calcTomorrowSummary(plan: BudgetPlan | null, tomorrowStatusVal: DailyStatus | null) {
-  const dailyBudget = plan?.daily_budget ?? 0
-  if (!dailyBudget) return null
-
-  const midCycle = plan?.mid_cycle_days ?? 0
-  const now = new Date()
-  const daysInMonth = midCycle > 0
-    ? midCycle
-    : new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
-  const foodAlloc = plan?.food_amount
-    ? plan.food_amount / daysInMonth
-    : (dailyStatus.value?.budgets?.find(b => b.category === 'food')?.allocated_amount ?? 0)
-  const othersAllocated = dailyBudget - foodAlloc
-
-  const tomorrowBudgets = tomorrowStatusVal?.budgets ?? []
-  const tomorrowFood = tomorrowBudgets.find(b => b.category === 'food')
-  const foodCarryover = (tomorrowFood?.carryover_in ?? 0) + (tomorrowFood?.deficit_cut_in ?? 0)
-  const othersCarryover = tomorrowBudgets
-    .filter(b => b.category !== 'food')
-    .reduce((s, b) => s + (b.carryover_in ?? 0) + (b.deficit_cut_in ?? 0), 0)
-
-  const foodEffective = foodAlloc + foodCarryover
-  const othersEffectiveRaw = othersAllocated + othersCarryover
-  const othersEffective = Math.max(othersEffectiveRaw, 0)
-  const totalEffective = foodEffective + othersEffective
-  const netCut = totalEffective - dailyBudget
-
-  return {
-    foodAllocated: foodAlloc,
-    foodCarryover,
-    foodEffective,
-    othersAllocated,
-    othersCarryover,
-    othersEffective,
-    totalAllocated: dailyBudget,
-    totalCut: netCut,
-    totalEffective,
-    hasAdjustment: netCut !== 0,
-    hasData: true,
-  }
-}
-
-const tomorrowSummary = computed(() => calcTomorrowSummary(budgetPlan.value, tomorrowStatus.value))
-
-const todayDate = ref(new Date().toLocaleDateString('id-ID', {
-  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-}))
-
-async function loadDashboard() {
-  loadError.value = false
-  const now = new Date()
-
-  todayDate.value = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-
-  todayStr.value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
-  todayLabel.value = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })
-  const yd = new Date(now); yd.setDate(yd.getDate() - 1)
-  yesterdayStr.value = `${yd.getFullYear()}-${String(yd.getMonth()+1).padStart(2,'0')}-${String(yd.getDate()).padStart(2,'0')}`
-  const tm = new Date(now); tm.setDate(tm.getDate() + 1)
-  tomorrowStr.value = `${tm.getFullYear()}-${String(tm.getMonth()+1).padStart(2,'0')}-${String(tm.getDate()).padStart(2,'0')}`
-  tomorrowLabel.value = tm.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })
-  tomorrowDay.value = tm.getDate()
-
-  try {
-    await pdStore.fetch()
-    const [statusRes, txRes, planRes, tomorrowRes, mandatoryRes, endDayStatusRes] = await Promise.all([
-      api.get(`/daily-budget/${todayStr.value}`).catch(() => null),
-      api.get('/transactions/today').catch(() => null),
-      api.get(`/budget-plan/${now.getMonth()+1}/${now.getFullYear()}`).catch(() => null),
-      api.get(`/daily-budget/${tomorrowStr.value}`).catch(() => null),
-      api.get(`/mandatory-expenditure/month/${now.getMonth()+1}/${now.getFullYear()}`).catch(() => null),
-      api.get(`/daily-budget/${todayStr.value}/end-day-status`).catch(() => null),
-    ])
-    if (!planRes) loadError.value = true
-    dailyStatus.value = statusRes?.data?.data ?? null
-    todayTx.value = txRes?.data?.data ?? []
-    budgetPlan.value = planRes?.data?.data ?? null
-    tomorrowStatus.value = tomorrowRes?.data?.data ?? null
-    paydayDay.value = pdStore.data?.payday_day ?? 0
-    nextCycleMandatory.value = mandatoryRes?.data?.data?.total ?? 0
-    endDayChoice.value = endDayStatusRes?.data?.data ?? null
-  } catch {
-    loadError.value = true
-  } finally {
-    loadingTx.value = false
-  }
-}
+const {
+  showEndDayModal, endDayAction, endDayTotal,
+  submittingEndDay, endDayError, undoError, undoing,
+  canEndDay, canUndoEndDay,
+  triggerEndOfDay, submitEndDay, undoEndDay, checkYesterdayCarryover,
+} = useEndDay(todayStr, yesterdayStr, endDayChoice, totalRemaining, loadDashboard)
 
 onMounted(async () => {
-  api.post('/budget-plan/check-reset').catch(() => null)
+  checkReset()
   await loadDashboard()
   await checkYesterdayCarryover()
 })
-
 onActivated(loadDashboard)
 </script>
