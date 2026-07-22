@@ -135,14 +135,8 @@ import { ref, computed } from 'vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import { MANDATORY_CATEGORIES } from '@/constants/categories'
 
-export interface MandatoryExpenditure {
-  mandatory_expenditure_id: string
-  category: string
-  description: string
-  amount: number
-  for_month?: number
-  for_year?: number
-}
+import type { MandatoryExpenditure } from '@/types'
+export type { MandatoryExpenditure }
 
 const props = defineProps<{
   items: MandatoryExpenditure[]
