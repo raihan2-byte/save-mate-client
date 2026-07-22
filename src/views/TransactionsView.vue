@@ -211,8 +211,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onActivated } from 'vue'
-import api from '@/api'
+import { ref, computed, watch, onMounted } from 'vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import ModalWrapper from '@/components/ui/ModalWrapper.vue'
 import AppButton from '@/components/ui/AppButton.vue'
@@ -221,16 +220,19 @@ import LoadingSkeleton from '@/components/ui/LoadingSkeleton.vue'
 import TransactionFormModal from '@/components/transactions/TransactionFormModal.vue'
 import TransactionItem from '@/components/transactions/TransactionItem.vue'
 import DateFilterBar from '@/components/transactions/DateFilterBar.vue'
-import { formatCurrency, toLocaleDateStr, addDays } from '@/utils/formatting'
-import { extractError } from '@/utils/errors'
+import { formatCurrency, addDays } from '@/utils/formatting'
 import { exportTransactionsToExcel } from '@/utils/exportExcel'
 import { Loader2, Download } from 'lucide-vue-next'
 import { useListFilter } from '@/composables/useListFilter'
-import type { Transaction } from '@/types'
+import { useDeficit } from '@/composables/useDeficit'
+import {
+  getToday, getByDate, getByRange,
+  addTransactionWithChoice, deleteTransaction,
+} from '@/services/transaction.service'
+import type { Transaction, AmbiguousResponse } from '@/types'
 
 const {
-  todayStr,
-  filterMode, modes,
+  todayStr, filterMode, modes,
   selectedDate, isToday, dateLabel: selectedLabel, prevDay, nextDay,
   rangeFromDate, rangeToDate, rangeLabel, shiftRange,
 } = useListFilter()
@@ -240,53 +242,41 @@ function onFilterModeChange(m: 'single' | 'range' | 'all') {
   loadTransactions()
 }
 
-// ── Data ──────────────────────────────────────────────────────
 const transactions = ref<Transaction[]>([])
 const loading = ref(true)
 const loadError = ref('')
+const recalculating = ref(false)
 
-// Form modal (add + edit combined)
 const showFormModal = ref(false)
 const editingTransaction = ref<Transaction | null>(null)
 
-// Ambiguous date clarification
 const showAmbiguousModal = ref(false)
-const ambiguous = ref<{ message: string; options: { yesterday_date: string; today_date: string } } | null>(null)
+const ambiguous = ref<AmbiguousResponse | null>(null)
 const pendingPayload = ref<Record<string, unknown> | null>(null)
-const budgetExceededError = ref('')
 
-// Budget exceeded modal
-const showBudgetExceededModal = ref(false)
-const budgetExceeded = ref<{ category: string; deficit: number } | null>(null)
-const applyingDeficit = ref(false)
-const deductingSavings = ref(false)
-// How much can still be cut from tomorrow's non-food budget (0 = tomorrow already maxed)
-const tomorrowCutCapacity = ref(0)
-// Versioned token: incremented by user choice to cancel stale overrun checks
-let _overrunVer = 0
-// True while user is actively processing a deficit choice — blocks any re-trigger
-const isHandlingOverrun = ref(false)
-
-const recalculating = ref(false)
-
-// Delete state
 const showDeleteModal = ref(false)
 const deletingId = ref('')
 const deleteLoading = ref(false)
 
-function openAddModal() {
-  editingTransaction.value = null
-  showFormModal.value = true
-}
-
-function openEditModal(tx: Transaction) {
-  editingTransaction.value = tx
-  showFormModal.value = true
-}
-
-function onDeleteRequest(tx: Transaction) {
-  deletingId.value = tx.transaction_id
-  showDeleteModal.value = true
+async function loadTransactions() {
+  loading.value = true
+  loadError.value = ''
+  try {
+    if (filterMode.value === 'single') {
+      transactions.value = isToday.value ? await getToday() : await getByDate(selectedDate.value)
+    } else if (filterMode.value === 'range') {
+      transactions.value = await getByRange(rangeFromDate.value, rangeToDate.value)
+    } else {
+      const now = new Date()
+      const from = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`
+      transactions.value = await getByRange(from, todayStr)
+    }
+  } catch (e: unknown) {
+    loadError.value = e instanceof Error ? e.message : 'Gagal memuat transaksi'
+    transactions.value = []
+  } finally {
+    loading.value = false
+  }
 }
 
 async function waitAndReload() {
@@ -295,15 +285,26 @@ async function waitAndReload() {
   recalculating.value = false
 }
 
+const {
+  showBudgetExceededModal, budgetExceeded,
+  applyingDeficit, deductingSavings,
+  tomorrowCutCapacity, budgetExceededError,
+  checkDailyBudgetOverrun, deductFromSavings, confirmDeficit,
+} = useDeficit(loadTransactions)
+
+function openAddModal() { editingTransaction.value = null; showFormModal.value = true }
+function openEditModal(tx: Transaction) { editingTransaction.value = tx; showFormModal.value = true }
+function onDeleteRequest(tx: Transaction) { deletingId.value = tx.transaction_id; showDeleteModal.value = true }
+
 async function confirmDelete() {
   deleteLoading.value = true
   try {
-    await api.delete(`/transactions/${deletingId.value}`)
+    await deleteTransaction(deletingId.value)
     showDeleteModal.value = false
     await waitAndReload()
     await checkDailyBudgetOverrun()
   } catch (e: unknown) {
-    loadError.value = extractError(e, 'Gagal menghapus transaksi')
+    loadError.value = e instanceof Error ? e.message : 'Gagal menghapus transaksi'
   } finally {
     deleteLoading.value = false
   }
@@ -313,7 +314,7 @@ async function onFormSaved(
   clarification?: { message: string; options: { yesterday_date: string; today_date: string }; originalPayload?: Record<string, unknown> }
 ) {
   if (clarification) {
-    ambiguous.value = clarification
+    ambiguous.value = clarification as AmbiguousResponse
     pendingPayload.value = clarification.originalPayload ?? null
     showAmbiguousModal.value = true
     return
@@ -322,12 +323,25 @@ async function onFormSaved(
   await checkDailyBudgetOverrun()
 }
 
+async function chooseDate(date: string) {
+  if (!ambiguous.value) return
+  try {
+    await addTransactionWithChoice({ ...(pendingPayload.value as Record<string, unknown> ?? {}), user_choice_date: date } as Parameters<typeof addTransactionWithChoice>[0])
+    showAmbiguousModal.value = false
+    ambiguous.value = null
+    pendingPayload.value = null
+    await loadTransactions()
+  } catch {
+    showAmbiguousModal.value = false
+  }
+}
+
 const totalSpent = computed(() => transactions.value.reduce((s, t) => s + (t.amount ?? 0), 0))
 
 const groupedTransactions = computed(() => {
   const groups: Record<string, Transaction[]> = {}
   for (const tx of transactions.value) {
-    const date = tx.assigned_date?.split('T')[0] ?? tx.assigned_date ?? 'unknown'
+    const date = tx.assigned_date?.split('T')[0] ?? 'unknown'
     if (!groups[date]) groups[date] = []
     groups[date].push(tx)
   }
@@ -341,171 +355,6 @@ function formatDateGroup(dateStr: string) {
   return new Date(y, m - 1, d).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-async function loadTransactions() {
-  loading.value = true
-  loadError.value = ''
-  try {
-    let res
-    if (filterMode.value === 'single') {
-      const endpoint = isToday.value ? '/transactions/today' : `/transactions/date/${selectedDate.value}`
-      res = await api.get(endpoint)
-    } else if (filterMode.value === 'range') {
-      res = await api.get(`/transactions/range?from=${rangeFromDate.value}&to=${rangeToDate.value}`)
-    } else {
-      const now = new Date()
-      const from = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`
-      const to = todayStr
-      res = await api.get(`/transactions/range?from=${from}&to=${to}`)
-    }
-    transactions.value = res.data.data ?? []
-
-  } catch (e: unknown) {
-    loadError.value = extractError(e, 'Gagal memuat transaksi')
-    transactions.value = []
-  } finally {
-    loading.value = false
-  }
-}
-
-watch(selectedDate, () => { if (filterMode.value === 'single') loadTransactions() })
-watch([rangeFromDate, rangeToDate], () => { if (filterMode.value === 'range') loadTransactions() })
-
-async function checkDailyBudgetOverrun() {
-  if (showBudgetExceededModal.value || isHandlingOverrun.value) return
-  const myVer = ++_overrunVer
-  try {
-    const today = toLocaleDateStr(new Date())
-    const tomorrow = addDays(today, 1)
-    const [budgetRes, txRes, tomorrowRes] = await Promise.all([
-      api.get(`/daily-budget/${today}`).catch(() => null),
-      api.get(`/transactions/date/${today}`).catch(() => null),
-      api.get(`/daily-budget/${tomorrow}`).catch(() => null),
-    ])
-    const data = budgetRes?.data?.data
-    if (!data) return
-
-    const dailyBudget = data.daily_budget ?? data.total_allocated ?? 0
-    const foodDailyBudget = data.food_daily_budget ?? 0
-    const nonFoodDailyBudget = dailyBudget - foodDailyBudget
-    const totalSpentVal = data.total_spent ?? 0
-    const totalDeficit = totalSpentVal - dailyBudget
-    if (totalDeficit <= 0) {
-      // Not over budget at all — mark all NULL txs as 'normal' and exit
-      if (myVer !== _overrunVer) return
-      api.patch('/transactions/deficit-choice', { date: today, choice: 'normal', savings_cut: 0 }).catch(() => {})
-      return
-    }
-
-    const txs: any[] = txRes?.data?.data ?? []
-
-    // Compute already-handled amount: savings cuts already deducted + tomorrow budget already cut
-    const savingsAlreadyCut: number = txs.reduce((s: number, t: any) => s + (t.deficit_savings_cut ?? 0), 0)
-    const tomorrowBudgets: Array<{ category: string; deficit_cut_in?: number }> = tomorrowRes?.data?.data?.budgets ?? []
-    const tomorrowAlreadyCut = tomorrowBudgets
-      .filter((b) => b.category !== 'food')
-      .reduce((s, b) => s + Math.abs(Math.min(b.deficit_cut_in ?? 0, 0)), 0)
-    const incrementalDeficit = Math.max(totalDeficit - savingsAlreadyCut - tomorrowAlreadyCut, 0)
-    if (myVer !== _overrunVer) return
-    // Use 1 rupiah threshold to guard against floating-point near-zero values
-    if (incrementalDeficit < 1) {
-      // No new deficit — silently mark any remaining NULL txs as 'normal' so they
-      // don't trigger the modal again on the next check.
-      api.patch('/transactions/deficit-choice', { date: today, choice: 'normal', savings_cut: 0 }).catch(() => {})
-      return
-    }
-
-    tomorrowCutCapacity.value = Math.max(nonFoodDailyBudget - tomorrowAlreadyCut, 0)
-
-    budgetExceeded.value = { category: '', deficit: incrementalDeficit }
-    budgetExceededError.value = ''
-    showBudgetExceededModal.value = true
-  } catch (e) {
-    console.error('[overrun check] error:', e)
-  }
-}
-
-async function deductFromSavings() {
-  if (!budgetExceeded.value) return
-  deductingSavings.value = true
-  isHandlingOverrun.value = true
-  budgetExceededError.value = ''
-  ++_overrunVer  // Cancel any in-flight overrun check
-  try {
-    const today = toLocaleDateStr(new Date())
-    await api.patch('/transactions/deficit-choice', {
-      date: today,
-      choice: 'savings',
-      savings_cut: budgetExceeded.value.deficit,
-    })
-    showBudgetExceededModal.value = false
-    budgetExceeded.value = null
-    await loadTransactions()
-  } catch (e: any) {
-    budgetExceededError.value = e.response?.data?.message ?? 'Gagal memotong tabungan. Coba lagi.'
-  } finally {
-    deductingSavings.value = false
-    isHandlingOverrun.value = false
-  }
-}
-
-async function confirmDeficit() {
-  if (!budgetExceeded.value) return
-  applyingDeficit.value = true
-  isHandlingOverrun.value = true
-  budgetExceededError.value = ''
-  ++_overrunVer  // Cancel any in-flight overrun check
-  try {
-    const today = toLocaleDateStr(new Date())
-    const deficit = Math.round(budgetExceeded.value.deficit)
-    // Cap tomorrow cut at non-food capacity; remainder comes from savings (split case)
-    // Use Math.round to avoid floating-point dust (e.g. 0.0001 treated as split)
-    const toCutTomorrow = Math.min(deficit, Math.round(tomorrowCutCapacity.value))
-    const toCutSavings = Math.max(0, deficit - toCutTomorrow)
-
-    if (toCutTomorrow > 0) {
-      const nonFoodCats = ['entertainment', 'shopping', 'misc']
-      await Promise.all(nonFoodCats.map(cat =>
-        api.post(`/daily-budget/${today}/carryover`, {
-          category: cat,
-          remaining_amount: -(toCutTomorrow / nonFoodCats.length),
-          action: 'cut_tomorrow',
-        })
-      ))
-    }
-
-    // Backend deducts toCutSavings from savings when savings_cut > 0
-    await api.patch('/transactions/deficit-choice', {
-      date: today,
-      choice: 'tomorrow',
-      savings_cut: toCutSavings,
-    })
-    showBudgetExceededModal.value = false
-    budgetExceeded.value = null
-    await loadTransactions()
-  } catch (e: any) {
-    budgetExceededError.value = e.response?.data?.message ?? 'Gagal memotong budget besok. Coba lagi.'
-  } finally {
-    applyingDeficit.value = false
-    isHandlingOverrun.value = false
-  }
-}
-
-async function chooseDate(date: string) {
-  if (!pendingPayload.value && !ambiguous.value) return
-  try {
-    await api.post('/transactions/add-with-choice', {
-      ...(pendingPayload.value ?? {}),
-      user_choice_date: date,
-    })
-    showAmbiguousModal.value = false
-    ambiguous.value = null
-    pendingPayload.value = null
-    await loadTransactions()
-  } catch {
-    showAmbiguousModal.value = false
-  }
-}
-
 function doExportExcel() {
   const label = filterMode.value === 'single'
     ? selectedDate.value
@@ -515,6 +364,8 @@ function doExportExcel() {
   exportTransactionsToExcel(transactions.value, label)
 }
 
+watch(selectedDate, () => { if (filterMode.value === 'single') loadTransactions() })
+watch([rangeFromDate, rangeToDate], () => { if (filterMode.value === 'range') loadTransactions() })
 
 onMounted(async () => {
   await loadTransactions()
