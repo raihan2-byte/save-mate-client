@@ -34,6 +34,7 @@ export interface Transaction {
   amount: number
   category: string
   description: string
+  name?: string
   assigned_date: string
   created_at: string
   type?: string
@@ -85,4 +86,28 @@ export interface PersonalData {
   location?: string
   job_title?: string
   employment_type?: string
+}
+
+export interface EndDayChoice {
+  Action: string
+  TotalAmount: number
+}
+
+export interface AmbiguousResponse {
+  requires_clarification: boolean
+  message: string
+  options: {
+    yesterday_date: string
+    today_date: string
+  }
+  original_payload?: Record<string, unknown>
+}
+
+export interface MandatoryExpenditure {
+  mandatory_expenditure_id: string
+  category: string
+  description: string
+  amount: number
+  for_month?: number
+  for_year?: number
 }
