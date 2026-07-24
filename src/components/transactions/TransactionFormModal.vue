@@ -48,13 +48,30 @@
 
       <!-- Description -->
       <div>
-        <label class="block text-sm font-medium text-slate-300 mb-1.5">Keterangan</label>
+        <label class="block text-sm font-medium text-slate-300 mb-1.5">
+          Keterangan <span class="text-slate-500 font-normal">(opsional)</span>
+        </label>
         <input
           v-model="form.description"
           type="text"
           class="input-dark"
           placeholder="Makan siang, bensin, dll."
         />
+        <!-- Quick-fill suggestions for the selected category -->
+        <div v-if="descriptionPresets.length" class="flex flex-wrap gap-1.5 mt-2">
+          <button
+            v-for="preset in descriptionPresets"
+            :key="preset"
+            type="button"
+            @click="form.description = preset"
+            class="text-xs px-2.5 py-1 rounded-full border transition-colors"
+            :class="form.description === preset
+              ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
+              : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10'"
+          >
+            {{ preset }}
+          </button>
+        </div>
       </div>
 
       <!-- Error -->
@@ -74,11 +91,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import ModalWrapper from '@/components/ui/ModalWrapper.vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import { useCurrencyInput } from '@/composables/useCurrencyInput'
-import { CATEGORY_LIST } from '@/constants/categories'
+import { CATEGORY_LIST, CATEGORIES, DESCRIPTION_PRESETS } from '@/constants/categories'
 import api from '@/api'
 import type { Transaction } from '@/types'
 
@@ -95,6 +112,15 @@ const emit = defineEmits<{
 const submitting = ref(false)
 const formError = ref('')
 const form = ref({ description: '', category: '' })
+
+const descriptionPresets = computed(() => DESCRIPTION_PRESETS[form.value.category] ?? [])
+
+// Fall back to the category label when the user leaves description empty.
+function resolvedDescription() {
+  const desc = form.value.description.trim()
+  if (desc) return desc
+  return CATEGORIES[form.value.category]?.label ?? 'Pengeluaran'
+}
 
 const {
   displayValue: amountDisplay,
@@ -129,7 +155,7 @@ async function handleSubmit() {
     if (props.editingTransaction) {
       await api.put(`/transactions/${props.editingTransaction.transaction_id}`, {
         amount: amountValue.value,
-        description: form.value.description,
+        description: resolvedDescription(),
         category: form.value.category,
       })
       emit('update:modelValue', false)
@@ -138,7 +164,7 @@ async function handleSubmit() {
       const payload = {
         amount: amountValue.value,
         category: form.value.category,
-        description: form.value.description,
+        description: resolvedDescription(),
         input_timestamp: new Date().toISOString(),
       }
       const res = await api.post('/transactions/add', payload)

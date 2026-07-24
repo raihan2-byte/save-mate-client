@@ -144,12 +144,29 @@
           </div>
         </div>
         <div>
-          <label class="block text-sm font-medium text-slate-300 mb-1.5">Keterangan <span class="text-slate-600">(min 6 karakter)</span></label>
-          <input v-model="form.description" type="text" minlength="6" maxlength="50" class="input-dark" placeholder="Gaji bulanan, freelance, dll." required />
+          <label class="block text-sm font-medium text-slate-300 mb-1.5">
+            Keterangan <span class="text-slate-500 font-normal">(opsional)</span>
+          </label>
+          <input v-model="form.description" type="text" maxlength="50" class="input-dark" placeholder="Gaji bulanan, freelance, dll." />
+          <div class="flex flex-wrap gap-1.5 mt-2">
+            <button
+              v-for="preset in INCOME_DESCRIPTION_PRESETS"
+              :key="preset"
+              type="button"
+              @click="form.description = preset"
+              class="text-xs px-2.5 py-1 rounded-full border transition-colors"
+              :class="form.description === preset
+                ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
+                : 'border-white/10 bg-white/5 text-slate-400 hover:bg-white/10'"
+            >
+              {{ preset }}
+            </button>
+          </div>
         </div>
         <div>
           <label class="block text-sm font-medium text-slate-300 mb-1.5">Tanggal</label>
-          <input v-model="form.date" type="date" class="input-dark" required />
+          <input :value="form.date" type="date" class="input-dark opacity-70 cursor-not-allowed" readonly disabled />
+          <p class="text-slate-500 text-xs mt-1.5">Pemasukan selalu dicatat untuk hari ini.</p>
         </div>
         <div v-if="error" class="bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl px-4 py-3">{{ error }}</div>
         <div class="flex gap-3 pt-1">
@@ -198,6 +215,7 @@ import LoadingSkeleton from '@/components/ui/LoadingSkeleton.vue'
 import IncomeItem from '@/components/income/IncomeItem.vue'
 import IncomeChoiceModal from '@/components/income/IncomeChoiceModal.vue'
 import { formatCurrency, toLocaleDateStr, addDays as addDaysUtil } from '@/utils/formatting'
+import { INCOME_DESCRIPTION_PRESETS } from '@/constants/categories'
 import type { Income } from '@/types/index'
 import { Loader2 } from 'lucide-vue-next'
 
@@ -291,8 +309,8 @@ function handleSubmitForm() {
   pendingIncome.value = {
     daily_income_id: '',
     amount: amountValue.value,
-    description: form.value.description,
-    transaction_date: form.value.date,
+    description: form.value.description.trim() || 'Pemasukan',
+    transaction_date: todayStr, // income is always recorded for today
     choice: '',
   }
   selectedChoice.value = ''; choiceError.value = ''; showModal.value = false; showChoiceModal.value = true
