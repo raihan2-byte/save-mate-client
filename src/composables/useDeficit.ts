@@ -92,10 +92,29 @@ export function useDeficit(onAfterHandled: () => Promise<void>) {
       const toCutSavings = Math.max(0, deficit - toCutTomorrow)
 
       if (toCutTomorrow > 0) {
-        const nonFoodCats = ['entertainment', 'shopping', 'misc']
-        await Promise.all(nonFoodCats.map(cat =>
-          postCarryover(today, cat, -(toCutTomorrow / nonFoodCats.length), 'cut_tomorrow')
-        ))
+        const tomorrow = addDays(today, 1)
+        const tomorrowData = await getDailyStatus(tomorrow).catch(() => null)
+        const nonFood = (tomorrowData?.budgets ?? []).filter(b => b.category !== 'food')
+        const totalCap = nonFood.reduce((s, b) => s + (b.allocated_amount ?? 0) + (b.carryover_in ?? 0), 0)
+
+        if (nonFood.length > 0 && totalCap > 0.01) {
+          // Distribute the cut proportionally to each category's capacity
+          // (matches the backend's proportional distribution — an equal ÷3
+          // split would drive small categories negative and waste big ones).
+          await Promise.all(nonFood.map(b => {
+            const cap = (b.allocated_amount ?? 0) + (b.carryover_in ?? 0)
+            if (cap <= 0) return Promise.resolve()
+            const cut = toCutTomorrow * (cap / totalCap)
+            return cut > 0.01 ? postCarryover(today, b.category, -cut, 'cut_tomorrow') : Promise.resolve()
+          }))
+        } else {
+          // Fallback: tomorrow has no tracker rows yet — split evenly across the
+          // three non-food categories.
+          const nonFoodCats = ['entertainment', 'shopping', 'misc']
+          await Promise.all(nonFoodCats.map(cat =>
+            postCarryover(today, cat, -(toCutTomorrow / nonFoodCats.length), 'cut_tomorrow')
+          ))
+        }
       }
       await patchDeficitChoice(today, 'tomorrow', toCutSavings)
       showBudgetExceededModal.value = false
