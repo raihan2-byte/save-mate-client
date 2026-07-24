@@ -29,14 +29,12 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function checkPersonalData() {
     try {
-      await api.get('/personal-data/')
-      hasPersonalData.value = true
-    } catch (e: unknown) {
-      const err = e as { response?: { status?: number } }
-      if (err?.response?.status === 404) {
-        hasPersonalData.value = false
-      }
-      // non-404 (auth error, server error) — leave hasPersonalData as-is
+      const res = await api.get('/personal-data/')
+      // Backend now returns 200 with data: null when the user has no personal
+      // data yet (instead of a 404), so route based on the payload.
+      hasPersonalData.value = !!res.data?.data
+    } catch {
+      // network/server error — leave hasPersonalData as-is
     }
   }
 

@@ -120,7 +120,7 @@ export function useFinancialSettings() {
         getSummaryByMonth(now.getMonth() + 1, now.getFullYear()),
       ])
 
-      if (pdRes.status === 'fulfilled') {
+      if (pdRes.status === 'fulfilled' && pdRes.value) {
         const pd = pdRes.value
         paydayDay.value = pd.payday_day ?? 1
         personalFormData.value = {

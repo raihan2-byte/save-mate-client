@@ -117,26 +117,6 @@
       @saved="onFormSaved"
     />
 
-    <!-- Ambiguous date modal -->
-    <ModalWrapper v-model="showAmbiguousModal">
-      <h2 class="font-black text-white text-lg mb-2">Konfirmasi Tanggal</h2>
-      <p class="text-slate-400 text-sm mb-6">{{ ambiguous?.message }}</p>
-      <div class="flex gap-3">
-        <button
-          @click="chooseDate(ambiguous!.options.yesterday_date)"
-          class="flex-1 py-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white font-semibold text-sm transition-colors"
-        >
-          Kemarin<br /><span class="text-slate-400 font-normal text-xs">{{ ambiguous?.options.yesterday_date }}</span>
-        </button>
-        <button
-          @click="chooseDate(ambiguous!.options.today_date)"
-          class="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white font-semibold text-sm transition-colors"
-          style="box-shadow: 0 0 20px rgba(16,185,129,0.3)"
-        >
-          Hari Ini<br /><span class="font-normal text-xs text-emerald-100">{{ ambiguous?.options.today_date }}</span>
-        </button>
-      </div>
-    </ModalWrapper>
 
     <!-- Budget Exceeded Modal -->
     <ModalWrapper v-model="showBudgetExceededModal" persistent>
@@ -229,7 +209,7 @@ import {
   getToday, getByDate, getByRange,
   addTransactionWithChoice, deleteTransaction,
 } from '@/services/transaction.service'
-import type { Transaction, AmbiguousResponse } from '@/types'
+import type { Transaction } from '@/types'
 
 const {
   todayStr, filterMode, modes,
@@ -249,10 +229,6 @@ const recalculating = ref(false)
 
 const showFormModal = ref(false)
 const editingTransaction = ref<Transaction | null>(null)
-
-const showAmbiguousModal = ref(false)
-const ambiguous = ref<AmbiguousResponse | null>(null)
-const pendingPayload = ref<Record<string, unknown> | null>(null)
 
 const showDeleteModal = ref(false)
 const deletingId = ref('')
@@ -313,27 +289,21 @@ async function confirmDelete() {
 async function onFormSaved(
   clarification?: { message: string; options: { yesterday_date: string; today_date: string }; originalPayload?: Record<string, unknown> }
 ) {
+  // Transactions are today-only. If the backend flags an ambiguous timing
+  // (e.g. entered near midnight), resolve it to TODAY automatically — never
+  // prompt for "yesterday".
   if (clarification) {
-    ambiguous.value = clarification as AmbiguousResponse
-    pendingPayload.value = clarification.originalPayload ?? null
-    showAmbiguousModal.value = true
-    return
+    try {
+      await addTransactionWithChoice({
+        ...(clarification.originalPayload as Record<string, unknown> ?? {}),
+        user_choice_date: clarification.options.today_date,
+      } as Parameters<typeof addTransactionWithChoice>[0])
+    } catch {
+      // fall through to reload; error surfaced on next load if any
+    }
   }
   await waitAndReload()
   await checkDailyBudgetOverrun()
-}
-
-async function chooseDate(date: string) {
-  if (!ambiguous.value) return
-  try {
-    await addTransactionWithChoice({ ...(pendingPayload.value as Record<string, unknown> ?? {}), user_choice_date: date } as Parameters<typeof addTransactionWithChoice>[0])
-    showAmbiguousModal.value = false
-    ambiguous.value = null
-    pendingPayload.value = null
-    await loadTransactions()
-  } catch {
-    showAmbiguousModal.value = false
-  }
 }
 
 const totalSpent = computed(() => transactions.value.reduce((s, t) => s + (t.amount ?? 0), 0))

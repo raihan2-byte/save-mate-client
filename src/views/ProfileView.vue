@@ -153,7 +153,7 @@ onMounted(async () => {
       api.get('/personal-data/'),
     ])
     if (bpRes.status === 'fulfilled') budget.value = bpRes.value.data.data
-    if (pdRes.status === 'fulfilled') {
+    if (pdRes.status === 'fulfilled' && pdRes.value.data.data) {
       const pd = pdRes.value.data.data
       paydayDay.value = pd.payday_day ?? 1
       savingType.value = pd.saving_type ?? 'recommendation'

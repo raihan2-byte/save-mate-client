@@ -2,10 +2,11 @@ import api from '@/api'
 import { extractError } from '@/utils/errors'
 import type { PersonalData } from '@/types'
 
-export async function getPersonalData(): Promise<PersonalData> {
+export async function getPersonalData(): Promise<PersonalData | null> {
   try {
     const res = await api.get('/personal-data/')
-    return res.data.data as PersonalData
+    // Backend returns 200 with data: null when the user has no personal data.
+    return (res.data.data ?? null) as PersonalData | null
   } catch (e) {
     throw new Error(extractError(e, 'Gagal memuat data pribadi'))
   }
