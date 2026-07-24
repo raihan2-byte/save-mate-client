@@ -218,13 +218,17 @@ const {
   showEndDayModal, endDayAction, endDayTotal,
   submittingEndDay, endDayError, undoError, undoing,
   canEndDay, canUndoEndDay,
-  triggerEndOfDay, submitEndDay, undoEndDay, checkYesterdayCarryover,
+  triggerEndOfDay, maybePromptEndDay, submitEndDay, undoEndDay, checkYesterdayCarryover,
 } = useEndDay(todayStr, yesterdayStr, endDayChoice, totalRemaining, loadDashboard)
 
 onMounted(async () => {
   checkReset()
   await loadDashboard()
   await checkYesterdayCarryover()
+  maybePromptEndDay()
 })
-onActivated(loadDashboard)
+onActivated(async () => {
+  await loadDashboard()
+  maybePromptEndDay()
+})
 </script>
