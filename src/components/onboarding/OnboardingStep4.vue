@@ -37,23 +37,69 @@
             <p class="font-black text-cyan-400 text-sm">{{ Math.round(opt.spendPct * 100) }}%</p>
           </div>
         </div>
+
+        <!-- Rincian budget untuk strategi terpilih -->
+        <div v-if="savingType === opt.type && detailFor(opt)" class="mt-3 pt-3 border-t border-white/10 space-y-1.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-slate-400">🏦 Tabungan</span>
+            <span class="text-xs font-bold text-emerald-400">{{ fmtCur(detailFor(opt)!.savings) }}<span class="text-slate-500 font-normal">/bln</span></span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-slate-400">🍜 Makanan</span>
+            <span class="text-xs font-semibold text-white">{{ fmtCur(detailFor(opt)!.food) }}<span class="text-slate-500 font-normal">/bln</span></span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-slate-400">🛍️ Gaya Hidup</span>
+            <span class="text-xs font-semibold text-white">{{ fmtCur(detailFor(opt)!.lifestyle) }}<span class="text-slate-500 font-normal">/bln</span></span>
+          </div>
+          <div class="flex items-center justify-between pt-1.5 border-t border-white/5">
+            <span class="text-xs text-slate-400">📅 Budget/hari</span>
+            <span class="text-xs font-bold text-cyan-400">{{ fmtCur(detailFor(opt)!.daily) }}</span>
+          </div>
+        </div>
       </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { SAVING_TYPES } from '@/constants/budgetConfig'
+import { SAVING_TYPES, FOOD_SPEND_PCT, LIFESTYLE_SPEND_PCT, DEFAULT_MONTH_DAYS } from '@/constants/budgetConfig'
+import { formatCurrency } from '@/utils/formatting'
 
-defineProps<{
+const props = defineProps<{
   savingType: string
+  available: number
 }>()
 
 const emit = defineEmits<{
   'update:savingType': [value: string]
 }>()
 
-const strategies = [
+const fmtCur = formatCurrency
+
+interface StrategyOption {
+  type: string
+  icon: string
+  label: string
+  desc: string
+  savePct: number
+  spendPct: number
+}
+
+function detailFor(opt: StrategyOption) {
+  const avail = Math.max(0, props.available)
+  if (avail <= 0) return null
+  const savings = avail * opt.savePct
+  const spending = avail * opt.spendPct
+  return {
+    savings,
+    food: spending * FOOD_SPEND_PCT,
+    lifestyle: spending * LIFESTYLE_SPEND_PCT,
+    daily: spending / DEFAULT_MONTH_DAYS,
+  }
+}
+
+const strategies: StrategyOption[] = [
   {
     type: 'frugal',
     icon: '🧊',

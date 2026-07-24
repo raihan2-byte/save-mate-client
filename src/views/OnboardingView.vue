@@ -190,12 +190,13 @@
 
           <OnboardingStep4
             :saving-type="s4.saving_type"
+            :available="available"
             @update:saving-type="s4.saving_type = $event"
           />
 
           <div class="flex flex-col sm:flex-row gap-3 mt-4">
             <AppButton variant="outline" class="flex-1" @click="step = 3">← Kembali</AppButton>
-            <AppButton variant="primary" class="flex-1" :disabled="!s4.saving_type" @click="startCalc">
+            <AppButton variant="primary" class="flex-1" :disabled="!s4.saving_type || isSubmitting" @click="startCalc">
               ✨ Buat Rencana Budget!
             </AppButton>
           </div>
@@ -466,8 +467,12 @@ const finalPlan = ref<FinalPlan>({
   breakdown: [],
 })
 
+const isSubmitting = ref(false)
+
 async function startCalc() {
   if (!s4.value.saving_type) return
+  if (isSubmitting.value) return // guard against double-submit
+  isSubmitting.value = true
   step.value = 5
   calcRevealCount.value = 0
   calcPhaseIdx.value = 0
@@ -590,6 +595,8 @@ async function startCalc() {
   } catch (e: any) {
     calcError.value = e.response?.data?.errors ?? e.response?.data?.message ?? 'Gagal menyimpan. Coba lagi.'
     step.value = 4
+  } finally {
+    isSubmitting.value = false
   }
 }
 
