@@ -22,7 +22,10 @@ export const DESCRIPTION_PRESETS: Record<string, string[]> = {
 }
 
 // Quick-fill description suggestions for income.
-export const INCOME_DESCRIPTION_PRESETS = ['Gaji', 'Bonus', 'Freelance', 'THR', 'Hadiah', 'Cashback']
+// Each must be at least 6 characters: the income endpoint validates
+// description with `min=6`, so shorter labels ("Gaji", "THR") are rejected with
+// a raw 422 the moment the chip is tapped.
+export const INCOME_DESCRIPTION_PRESETS = ['Gaji bulanan', 'Bonus kerja', 'Freelance', 'THR Lebaran', 'Hadiah', 'Cashback']
 
 export const MANDATORY_CATEGORIES = [
   { value: 'housing',      icon: '🏠', label: 'Kost/Sewa' },

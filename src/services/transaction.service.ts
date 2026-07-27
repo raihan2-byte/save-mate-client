@@ -1,6 +1,6 @@
 import api from '@/api'
 import { extractError } from '@/utils/errors'
-import type { Transaction, AmbiguousResponse } from '@/types'
+import type { Transaction } from '@/types'
 
 export async function getToday(): Promise<Transaction[]> {
   try {
@@ -26,22 +26,6 @@ export async function getByRange(from: string, to: string): Promise<Transaction[
     return res.data.data ?? []
   } catch (e) {
     throw new Error(extractError(e, 'Gagal memuat transaksi'))
-  }
-}
-
-export async function addTransaction(payload: {
-  amount: number
-  category: string
-  description: string
-  input_timestamp: string
-}): Promise<{ transaction: Transaction | null; ambiguous: AmbiguousResponse | null }> {
-  try {
-    const res = await api.post('/transactions/', payload)
-    const data = res.data.data
-    if (data?.requires_clarification) return { transaction: null, ambiguous: data as AmbiguousResponse }
-    return { transaction: data as Transaction, ambiguous: null }
-  } catch (e) {
-    throw new Error(extractError(e, 'Gagal menambah transaksi'))
   }
 }
 
@@ -82,10 +66,11 @@ export async function deleteTransaction(id: string): Promise<void> {
 export async function patchDeficitChoice(
   date: string,
   choice: string,
-  savingsCut: number
+  savingsCut: number,
+  totalDeficit: number = 0
 ): Promise<void> {
   try {
-    await api.patch('/transactions/deficit-choice', { date, choice, savings_cut: savingsCut })
+    await api.patch('/transactions/deficit-choice', { date, choice, savings_cut: savingsCut, total_deficit: totalDeficit })
   } catch (e) {
     throw new Error(extractError(e, 'Gagal menyimpan pilihan deficit'))
   }
