@@ -1,10 +1,9 @@
 import { ref, computed } from 'vue'
-import { postEndDay, postUndoEndDay, getDailyStatus, getEndDayStatus } from '@/services/budget.service'
-import type { EndDayChoice, BudgetTrackerItem } from '@/types'
+import { postEndDay, postUndoEndDay, settlePendingDays } from '@/services/budget.service'
+import type { EndDayChoice } from '@/types'
 
 export function useEndDay(
   todayStr: Readonly<{ value: string }>,
-  yesterdayStr: Readonly<{ value: string }>,
   endDayChoice: { value: EndDayChoice | null },
   totalRemaining: Readonly<{ value: number }>,
   onReload: () => Promise<void>
@@ -74,31 +73,20 @@ export function useEndDay(
     }
   }
 
-  async function checkYesterdayCarryover() {
-    if (!yesterdayStr.value) return
-    try {
-      // Already finalized (end-day done) for yesterday → nothing to do
-      const alreadyProcessed = await getEndDayStatus(yesterdayStr.value).catch(() => null)
-      if (alreadyProcessed) return
-      const status = await getDailyStatus(yesterdayStr.value).catch(() => null)
-      if (!status) return
-      const budgets = (status.budgets ?? []) as BudgetTrackerItem[]
-      const pending = budgets.filter(b => !b.is_finalized && b.remaining > 0)
-      if (pending.length === 0) return
-      // Yesterday's decision window (20:30–24:00) has already passed, so the
-      // leftover defaults to savings.
-      const totalRem = pending.reduce((s, b) => s + b.remaining, 0)
-      await postEndDay(yesterdayStr.value, 'save', totalRem)
-      await onReload()
-    } catch {
-      // non-critical — silently ignore
-    }
+  // Close out any day whose decision window (20:30–24:00) has passed without the
+  // user choosing. The server decides which days qualify and how much is left —
+  // this used to be worked out here, which meant it only ever caught yesterday
+  // and only if the dashboard happened to be opened.
+  async function settleExpiredDays() {
+    if (!todayStr.value) return
+    const settled = await settlePendingDays(todayStr.value)
+    if (settled > 0) await onReload()
   }
 
   return {
     showEndDayModal, endDayAction, endDayTotal,
     submittingEndDay, endDayError, undoError, undoing,
     canEndDay, canUndoEndDay,
-    triggerEndOfDay, maybePromptEndDay, submitEndDay, undoEndDay, checkYesterdayCarryover,
+    triggerEndOfDay, maybePromptEndDay, submitEndDay, undoEndDay, settleExpiredDays,
   }
 }

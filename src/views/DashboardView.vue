@@ -204,7 +204,7 @@ import { useEndDay } from '@/composables/useEndDay'
 const {
   dailyStatus, budgetPlan, todayTx, tomorrowStatus,
   loadingTx, loadError, paydayDay, endDayChoice,
-  todayStr, todayDate, todayLabel, yesterdayStr, tomorrowStr, tomorrowLabel, tomorrowDay,
+  todayStr, todayDate, todayLabel, tomorrowStr, tomorrowLabel, tomorrowDay,
   firstName, foodTracker, lifestyleTracker,
   foodAllocated, foodSpent, foodRemaining, foodUsedPct,
   foodBadgeClass, foodBadgeText, foodBarClass,
@@ -218,13 +218,13 @@ const {
   showEndDayModal, endDayAction, endDayTotal,
   submittingEndDay, endDayError, undoError, undoing,
   canEndDay, canUndoEndDay,
-  triggerEndOfDay, maybePromptEndDay, submitEndDay, undoEndDay, checkYesterdayCarryover,
-} = useEndDay(todayStr, yesterdayStr, endDayChoice, totalRemaining, loadDashboard)
+  triggerEndOfDay, maybePromptEndDay, submitEndDay, undoEndDay, settleExpiredDays,
+} = useEndDay(todayStr, endDayChoice, totalRemaining, loadDashboard)
 
 onMounted(async () => {
   checkReset()
   await loadDashboard()
-  await checkYesterdayCarryover()
+  await settleExpiredDays()
   maybePromptEndDay()
 })
 onActivated(async () => {

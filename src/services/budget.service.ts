@@ -48,6 +48,22 @@ export async function postUndoEndDay(date: string): Promise<void> {
   }
 }
 
+/**
+ * Ask the server to close out any past day the user never decided on. The
+ * server picks the days, sums the leftovers and applies the default (savings) —
+ * the client only supplies today's date. Returns how many days were settled.
+ */
+export async function settlePendingDays(today: string): Promise<number> {
+  try {
+    const res = await api.post(`/daily-budget/${today}/settle-pending`)
+    return res.data.data?.settled_days ?? 0
+  } catch {
+    // Non-critical: the next dashboard load retries, and the server is
+    // idempotent so nothing is double-counted.
+    return 0
+  }
+}
+
 export async function getEndDayStatus(date: string): Promise<EndDayChoice | null> {
   try {
     const res = await api.get(`/daily-budget/${date}/end-day-status`)
