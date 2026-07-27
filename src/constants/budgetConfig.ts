@@ -1,13 +1,10 @@
 export const BUDGET_THRESHOLDS = { warning: 60, critical: 80 }
-export const FOOD_SPEND_PCT = 0.65
-export const LIFESTYLE_SPEND_PCT = 0.35
-export const SAVING_TYPES: Record<string, { save: number; spend: number }> = {
-  frugal:         { save: 0.65, spend: 0.35 },
-  recommendation: { save: 0.45, spend: 0.55 },
-  normal:         { save: 0.25, spend: 0.75 },
-}
 export const SPREAD_DURATIONS = [7, 14, 30]
 export const DEFAULT_MONTH_DAYS = 30
+
+// Display-only ordering/labels. The save/spend split for each type comes from
+// the server (see stores/budgetConfig.ts) — never hardcode it here again.
+export const SAVING_TYPE_KEYS = ['frugal', 'recommendation', 'normal'] as const
 
 export interface BudgetPreview {
   salary: number
@@ -22,19 +19,28 @@ export interface BudgetPreview {
   savingType: string
 }
 
+/**
+ * Mirrors the server's allocation for preview purposes only.
+ *
+ * `alloc` and `foodPct` must come from the budget-config store — they are the
+ * server's own numbers. Returns null when the config has not loaded yet, so a
+ * preview is never rendered from guessed percentages.
+ */
 export function calcBudgetPreview(
   salary: number,
   mandatory: number,
   savingType: string,
   daysInMonth: number,
+  alloc: { save: number; spend: number } | null,
+  foodPct: number | undefined,
 ): BudgetPreview | null {
-  const alloc = SAVING_TYPES[savingType] ?? SAVING_TYPES.recommendation
+  if (!alloc || foodPct === undefined) return null
   const available = salary - mandatory
   if (available <= 0) return null
   const savingsAmount = available * alloc.save
   const spendingBudget = available * alloc.spend
-  const foodAmount = spendingBudget * FOOD_SPEND_PCT
-  const lifestyleAmount = spendingBudget * LIFESTYLE_SPEND_PCT
+  const foodAmount = spendingBudget * foodPct
+  const lifestyleAmount = spendingBudget * (1 - foodPct)
   const dailyBudget = spendingBudget / daysInMonth
   const dailySavings = savingsAmount / daysInMonth
   return { salary, mandatory, available, savingsAmount, spendingBudget, foodAmount, lifestyleAmount, dailyBudget, dailySavings, savingType }

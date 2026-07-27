@@ -5,11 +5,13 @@ import { getMandatoryByMonth, addMandatory, deleteMandatory } from '@/services/m
 import { getSummaryByMonth } from '@/services/summary.service'
 import { syncToday } from '@/services/budget.service'
 import { calcBudgetPreview } from '@/constants/budgetConfig'
+import { useBudgetConfigStore } from '@/stores/budgetConfig'
 import { formatCurrency, formatCurrencyShort } from '@/utils/formatting'
 import type { BudgetPlan, MandatoryExpenditure } from '@/types'
 import type { PersonalDataFormData } from '@/components/settings/PersonalDataForm.vue'
 
 export function useFinancialSettings() {
+  const budgetConfig = useBudgetConfigStore()
   const now = new Date()
   const _nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1)
   const nextMonthNum = _nextMonthDate.getMonth() + 1
@@ -67,7 +69,10 @@ export function useFinancialSettings() {
   const nextBudgetPreview = computed(() => {
     if (nextSalaryNumeric.value <= 0) return null
     const allMandatory = allExpenses.value.reduce((s, e) => s + (e.amount ?? 0), 0)
-    return calcBudgetPreview(nextSalaryNumeric.value, allMandatory, personalFormData.value.savingType, nextMonthDays.value)
+    return calcBudgetPreview(
+      nextSalaryNumeric.value, allMandatory, personalFormData.value.savingType, nextMonthDays.value,
+      budgetConfig.ratioFor(personalFormData.value.savingType), budgetConfig.config?.food_pct_of_spending,
+    )
   })
 
   const monthLabel = computed(() => {
@@ -114,6 +119,7 @@ export function useFinancialSettings() {
   async function loadAll() {
     loading.value = true
     try {
+      await budgetConfig.fetch()
       const [pdRes, bpRes, summaryRes] = await Promise.allSettled([
         getPersonalData(),
         getPlanByMonth(now.getMonth() + 1, now.getFullYear()),

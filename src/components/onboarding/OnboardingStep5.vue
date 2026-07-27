@@ -24,7 +24,8 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
-import { SAVING_TYPES, FOOD_SPEND_PCT, DEFAULT_MONTH_DAYS } from '@/constants/budgetConfig'
+import { DEFAULT_MONTH_DAYS } from '@/constants/budgetConfig'
+import { useBudgetConfigStore } from '@/stores/budgetConfig'
 
 const props = defineProps<{
   salary: number
@@ -46,8 +47,12 @@ const calcPhases = [
 
 const calcPhase = computed(() => calcPhases[Math.min(props.calcPhaseIdx, calcPhases.length - 1)])
 
+const budgetConfig = useBudgetConfigStore()
+
 const calcItems = computed(() => {
-  const strat = SAVING_TYPES[props.savingType] ?? SAVING_TYPES.recommendation
+  const strat = budgetConfig.ratioFor(props.savingType)
+  const foodPct = budgetConfig.config?.food_pct_of_spending
+  if (!strat || foodPct === undefined) return []
   const avail = Math.max(0, props.salary - props.mandatory)
   const flexible = avail * strat.spend
   const savings = avail * strat.save
@@ -57,7 +62,7 @@ const calcItems = computed(() => {
     { label: '= Dana tersedia',         value: avail,           color: 'text-emerald-400' },
     { label: '📕 Target tabungan/bln',  value: Math.round(savings),   color: 'text-red-300' },
     { label: '🟦 Budget fleksibel/bln', value: Math.round(flexible),  color: 'text-cyan-400' },
-    { label: '🍜 Budget makan/hari',    value: Math.round(flexible * FOOD_SPEND_PCT / DEFAULT_MONTH_DAYS), color: 'text-white' },
+    { label: '🍜 Budget makan/hari',    value: Math.round(flexible * foodPct / DEFAULT_MONTH_DAYS), color: 'text-white' },
     { label: '🎯 Budget harian total',  value: Math.round(flexible / DEFAULT_MONTH_DAYS), color: 'text-emerald-400' },
   ]
 })

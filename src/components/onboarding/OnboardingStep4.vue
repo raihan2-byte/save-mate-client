@@ -63,7 +63,9 @@
 </template>
 
 <script setup lang="ts">
-import { SAVING_TYPES, FOOD_SPEND_PCT, LIFESTYLE_SPEND_PCT, DEFAULT_MONTH_DAYS } from '@/constants/budgetConfig'
+import { computed } from 'vue'
+import { DEFAULT_MONTH_DAYS } from '@/constants/budgetConfig'
+import { useBudgetConfigStore } from '@/stores/budgetConfig'
 import { formatCurrency } from '@/utils/formatting'
 
 const props = defineProps<{
@@ -86,43 +88,34 @@ interface StrategyOption {
   spendPct: number
 }
 
+const budgetConfig = useBudgetConfigStore()
+
 function detailFor(opt: StrategyOption) {
   const avail = Math.max(0, props.available)
-  if (avail <= 0) return null
+  const foodPct = budgetConfig.config?.food_pct_of_spending
+  if (avail <= 0 || foodPct === undefined) return null
   const savings = avail * opt.savePct
   const spending = avail * opt.spendPct
   return {
     savings,
-    food: spending * FOOD_SPEND_PCT,
-    lifestyle: spending * LIFESTYLE_SPEND_PCT,
+    food: spending * foodPct,
+    lifestyle: spending * (1 - foodPct),
     daily: spending / DEFAULT_MONTH_DAYS,
   }
 }
 
-const strategies: StrategyOption[] = [
-  {
-    type: 'frugal',
-    icon: '🧊',
-    label: 'Frugal',
-    desc: 'Hemat ketat — prioritas tabungan maksimal',
-    savePct: SAVING_TYPES.frugal.save,
-    spendPct: SAVING_TYPES.frugal.spend,
-  },
-  {
-    type: 'recommendation',
-    icon: '✅',
-    label: 'Rekomendasi',
-    desc: 'Seimbang — enjoy hidup & tetap nabung',
-    savePct: SAVING_TYPES.recommendation.save,
-    spendPct: SAVING_TYPES.recommendation.spend,
-  },
-  {
-    type: 'normal',
-    icon: '😊',
-    label: 'Normal',
-    desc: 'Fleksibel — santai, belanja lebih bebas',
-    savePct: SAVING_TYPES.normal.save,
-    spendPct: SAVING_TYPES.normal.spend,
-  },
+const STRATEGY_LABELS = [
+  { type: 'frugal',         icon: '🧊', label: 'Frugal',      desc: 'Hemat ketat — prioritas tabungan maksimal' },
+  { type: 'recommendation', icon: '✅', label: 'Rekomendasi', desc: 'Seimbang — enjoy hidup & tetap nabung' },
+  { type: 'normal',         icon: '😊', label: 'Normal',      desc: 'Fleksibel — santai, belanja lebih bebas' },
 ]
+
+// Empty until the server's ruleset arrives, so no strategy is ever shown with a
+// percentage the backend would not actually apply.
+const strategies = computed<StrategyOption[]>(() =>
+  STRATEGY_LABELS.flatMap(s => {
+    const ratio = budgetConfig.ratioFor(s.type)
+    return ratio ? [{ ...s, savePct: ratio.save, spendPct: ratio.spend }] : []
+  })
+)
 </script>

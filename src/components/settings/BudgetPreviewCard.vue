@@ -37,7 +37,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { SAVING_TYPES } from '@/constants/budgetConfig'
+import { useBudgetConfigStore } from '@/stores/budgetConfig'
 
 const props = defineProps<{
   salary: number
@@ -48,15 +48,19 @@ const props = defineProps<{
   originalSavingType: string
 }>()
 
+const budgetConfig = useBudgetConfigStore()
+
 const days = computed(() => props.daysInMonth ?? 30)
 const available = computed(() => props.salary - props.mandatory)
 
-const spendPct = computed(() => SAVING_TYPES[props.savingType]?.spend ?? 0.55)
+// 0 until the server's ruleset loads — the card renders zeros briefly rather
+// than numbers based on a guessed split.
+const spendPct = computed(() => budgetConfig.ratioFor(props.savingType)?.spend ?? 0)
 const dailyBudget = computed(() => available.value > 0 ? (available.value * spendPct.value) / days.value : 0)
 const savings = computed(() => available.value > 0 ? available.value * (1 - spendPct.value) : 0)
 
 const originalAvailable = computed(() => props.originalSalary - props.mandatory)
-const oldSpendPct = computed(() => SAVING_TYPES[props.originalSavingType]?.spend ?? spendPct.value)
+const oldSpendPct = computed(() => budgetConfig.ratioFor(props.originalSavingType)?.spend ?? spendPct.value)
 const oldDailyBudget = computed(() =>
   originalAvailable.value > 0 ? (originalAvailable.value * oldSpendPct.value) / days.value : 0
 )

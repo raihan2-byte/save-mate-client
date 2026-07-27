@@ -247,8 +247,10 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { completeOnboarding } from '@/services/onboarding.service'
 import { useCurrencyInput } from '@/composables/useCurrencyInput'
-import { SAVING_TYPES, FOOD_SPEND_PCT, LIFESTYLE_SPEND_PCT, DEFAULT_MONTH_DAYS } from '@/constants/budgetConfig'
+import { DEFAULT_MONTH_DAYS } from '@/constants/budgetConfig'
+import { useBudgetConfigStore } from '@/stores/budgetConfig'
 import AppButton from '@/components/ui/AppButton.vue'
 import OnboardingStep1 from '@/components/onboarding/OnboardingStep1.vue'
 import OnboardingStep2 from '@/components/onboarding/OnboardingStep2.vue'
@@ -260,6 +262,8 @@ import type { FinalPlan } from '@/components/onboarding/OnboardingStep6.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
+const budgetConfig = useBudgetConfigStore()
+budgetConfig.fetch()
 
 // ── Regions ──────────────────────────────────────────────────────────
 const regions = ref<any[]>([])
@@ -388,58 +392,48 @@ const availableNegative = computed(() => available.value < 0)
 // ── Step 4: Strategy ─────────────────────────────────────────────────
 const s4 = ref({ saving_type: '' })
 
-const savingStrategies = [
-  {
-    type: 'frugal',
-    icon: '🧊',
-    label: 'Frugal',
-    desc: 'Hemat ketat — prioritas tabungan maksimal',
-    savePct: SAVING_TYPES.frugal.save,
-    spendPct: SAVING_TYPES.frugal.spend,
-  },
-  {
-    type: 'recommendation',
-    icon: '✅',
-    label: 'Rekomendasi',
-    desc: 'Seimbang — enjoy hidup & tetap nabung',
-    savePct: SAVING_TYPES.recommendation.save,
-    spendPct: SAVING_TYPES.recommendation.spend,
-  },
-  {
-    type: 'normal',
-    icon: '😊',
-    label: 'Normal',
-    desc: 'Fleksibel — santai, belanja lebih bebas',
-    savePct: SAVING_TYPES.normal.save,
-    spendPct: SAVING_TYPES.normal.spend,
-  },
+const STRATEGY_LABELS = [
+  { type: 'frugal',         icon: '🧊', label: 'Frugal',      desc: 'Hemat ketat — prioritas tabungan maksimal' },
+  { type: 'recommendation', icon: '✅', label: 'Rekomendasi', desc: 'Seimbang — enjoy hidup & tetap nabung' },
+  { type: 'normal',         icon: '😊', label: 'Normal',      desc: 'Fleksibel — santai, belanja lebih bebas' },
 ]
 
+const savingStrategies = computed(() =>
+  STRATEGY_LABELS.flatMap(s => {
+    const ratio = budgetConfig.ratioFor(s.type)
+    return ratio ? [{ ...s, savePct: ratio.save, spendPct: ratio.spend }] : []
+  })
+)
+
+// Preview arithmetic only. The plan the user actually gets is calculated
+// server-side; these mirror it using the server's own ratios.
 function calcFor(type: string) {
-  const strat = SAVING_TYPES[type] ?? SAVING_TYPES.recommendation
+  const strat = budgetConfig.ratioFor(type)
+  const foodPct = budgetConfig.config?.food_pct_of_spending ?? 0
   const avail = Math.max(0, available.value)
-  const flexible = avail * strat.spend
-  const savings = avail * strat.save
+  const flexible = avail * (strat?.spend ?? 0)
+  const savings = avail * (strat?.save ?? 0)
   return {
     savings: Math.round(savings),
     flexible: Math.round(flexible),
     dailyFlexible: Math.round(flexible / DEFAULT_MONTH_DAYS),
     dailySavings: Math.round(savings / DEFAULT_MONTH_DAYS),
-    dailyFood: Math.round(flexible * FOOD_SPEND_PCT / DEFAULT_MONTH_DAYS),
+    dailyFood: Math.round(flexible * foodPct / DEFAULT_MONTH_DAYS),
   }
 }
 
 function calcMidCycle(type: string) {
-  const strat = SAVING_TYPES[type] ?? SAVING_TYPES.recommendation
+  const strat = budgetConfig.ratioFor(type)
+  const foodPct = budgetConfig.config?.food_pct_of_spending ?? 0
   const net = Math.max(0, netBalance.value)
   const days = daysToNextPayday.value
-  const flexible = net * strat.spend
-  const savings = net * strat.save
+  const flexible = net * (strat?.spend ?? 0)
+  const savings = net * (strat?.save ?? 0)
   return {
     savings: Math.round(savings),
     flexible: Math.round(flexible),
     dailyFlexible: Math.round(flexible / days),
-    dailyFood: Math.round(flexible * FOOD_SPEND_PCT / days),
+    dailyFood: Math.round(flexible * foodPct / days),
   }
 }
 
@@ -494,73 +488,35 @@ async function startCalc() {
   await sleep(2800)
 
   try {
-    await api.post('/personal-data/', {
+    // One transactional call. Previously this was three separate requests — and
+    // a failed mandatory-expense POST was swallowed, so the budget plan came out
+    // calculated as if that expense did not exist. The server also derives the
+    // cycle timing and the mid-cycle balance split; we only send raw answers.
+    await completeOnboarding({
       salary: salaryValue.value,
       purpose_of_join_here: purposeValue.value,
       saving_type: s4.value.saving_type,
       payday_day: s1.value.paydayDay,
+      region: s1.value.region,
+      mandatory_items: mandatoryItems.value.map(i => ({
+        category: i.category,
+        description: i.description,
+        amount: i.amount,
+      })),
+      ...(isMidCycle.value ? {
+        mid_cycle_strategy: s2.value.strategy,
+        current_balance: currentBalanceValue.value,
+        pending_items: pendingItems.value.map(i => ({
+          description: i.description,
+          amount: i.amount,
+        })),
+      } : {}),
     })
 
-    const now = new Date()
-    const txDate = now.toISOString()
-    for (const item of mandatoryItems.value) {
-      try {
-        await api.post('/mandatory-expenditure/', {
-          category: item.category,
-          amount: item.amount,
-          description: item.description,
-          transaction_date: txDate,
-          for_month: isMidCycle.value ? nextPaydayMonth.value : now.getMonth() + 1,
-          for_year: isMidCycle.value ? nextPaydayYear.value : now.getFullYear(),
-        })
-      } catch {}
-    }
-
-    const midCycleNet = Math.max(0, netBalance.value)
-    if (isMidCycle.value && midCycleSpansTwoMonths.value) {
-      const totalDays = daysToNextPayday.value
-      const daysCurrentMonth = daysRemainingCurrentMonth.value
-      const daysNextMonth = s1.value.paydayDay - 1
-      const balanceCurrentMonth = midCycleNet * daysCurrentMonth / totalDays
-      const balanceNextMonth = midCycleNet * daysNextMonth / totalDays
-
-      await api.post('/budget-plan/', {
-        for_month: now.getMonth() + 1,
-        for_year: now.getFullYear(),
-        saving_type: s2.value.strategy,
-        region: s1.value.region,
-        current_balance: balanceCurrentMonth,
-        days_remaining: daysCurrentMonth,
-        mandatory_already_paid: true,
-        pending_mandatory: totalPending.value,
-      })
-
-      await api.post('/budget-plan/', {
-        for_month: nextPaydayMonth.value,
-        for_year: nextPaydayYear.value,
-        saving_type: s2.value.strategy,
-        region: s1.value.region,
-        current_balance: balanceNextMonth,
-        days_remaining: daysNextMonth,
-        mandatory_already_paid: true,
-        pending_mandatory: 0,
-      })
-    } else {
-      await api.post('/budget-plan/', {
-        for_month: isMidCycle.value ? nextPaydayMonth.value : now.getMonth() + 1,
-        for_year: isMidCycle.value ? nextPaydayYear.value : now.getFullYear(),
-        saving_type: isMidCycle.value ? s2.value.strategy : s4.value.saving_type,
-        region: s1.value.region,
-        ...(isMidCycle.value ? {
-          current_balance: midCycleNet,
-          days_remaining: daysToNextPayday.value,
-          mandatory_already_paid: true,
-          pending_mandatory: totalPending.value,
-        } : {}),
-      })
-    }
-
     auth.hasPersonalData = true
+
+    const foodPct = budgetConfig.config?.food_pct_of_spending ?? 0
+    const lifestylePct = 1 - foodPct
 
     if (isMidCycle.value) {
       const mc = calcMidCycle(s2.value.strategy)
@@ -570,8 +526,8 @@ async function startCalc() {
         dailySavings: Math.round(mc.savings / daysToNextPayday.value),
         dailyFlexible: mc.dailyFlexible,
         breakdown: [
-          { icon: '🍜', label: 'Makanan',  daily: mc.dailyFood, pct: Math.round(FOOD_SPEND_PCT * 100), color: 'text-white',       barColor: 'bg-emerald-400' },
-          { icon: '🛍️', label: 'Lainnya', daily: Math.round(mc.flexible * LIFESTYLE_SPEND_PCT / daysToNextPayday.value), pct: Math.round(LIFESTYLE_SPEND_PCT * 100), color: 'text-cyan-400', barColor: 'bg-cyan-400' },
+          { icon: '🍜', label: 'Makanan',  daily: mc.dailyFood, pct: Math.round(foodPct * 100), color: 'text-white',       barColor: 'bg-emerald-400' },
+          { icon: '🛍️', label: 'Lainnya', daily: Math.round(mc.flexible * lifestylePct / daysToNextPayday.value), pct: Math.round(lifestylePct * 100), color: 'text-cyan-400', barColor: 'bg-cyan-400' },
         ],
       }
     } else {
@@ -582,18 +538,18 @@ async function startCalc() {
         dailySavings: c.dailySavings,
         dailyFlexible: c.dailyFlexible,
         breakdown: [
-          { icon: '🍜', label: 'Makanan',  daily: Math.round(c.flexible * FOOD_SPEND_PCT / DEFAULT_MONTH_DAYS), pct: 65, color: 'text-white',        barColor: 'bg-emerald-400' },
-          { icon: '🎮', label: 'Hiburan',  daily: Math.round(c.flexible * LIFESTYLE_SPEND_PCT * 0.20 / DEFAULT_MONTH_DAYS), pct: 7,  color: 'text-cyan-400',   barColor: 'bg-cyan-400' },
-          { icon: '🛍️', label: 'Belanja', daily: Math.round(c.flexible * LIFESTYLE_SPEND_PCT * 0.17 / DEFAULT_MONTH_DAYS), pct: 6,  color: 'text-violet-400', barColor: 'bg-violet-400' },
-          { icon: '📦', label: 'Lainnya', daily: Math.round(c.flexible * LIFESTYLE_SPEND_PCT * 0.63 / DEFAULT_MONTH_DAYS), pct: 22, color: 'text-slate-300',  barColor: 'bg-slate-400' },
+          { icon: '🍜', label: 'Makanan',  daily: Math.round(c.flexible * foodPct / DEFAULT_MONTH_DAYS), pct: Math.round(foodPct * 100), color: 'text-white',        barColor: 'bg-emerald-400' },
+          { icon: '🎮', label: 'Hiburan',  daily: Math.round(c.flexible * lifestylePct * 0.20 / DEFAULT_MONTH_DAYS), pct: Math.round(lifestylePct * 20),  color: 'text-cyan-400',   barColor: 'bg-cyan-400' },
+          { icon: '🛍️', label: 'Belanja', daily: Math.round(c.flexible * lifestylePct * 0.17 / DEFAULT_MONTH_DAYS), pct: Math.round(lifestylePct * 17),  color: 'text-violet-400', barColor: 'bg-violet-400' },
+          { icon: '📦', label: 'Lainnya', daily: Math.round(c.flexible * lifestylePct * 0.63 / DEFAULT_MONTH_DAYS), pct: Math.round(lifestylePct * 63), color: 'text-slate-300',  barColor: 'bg-slate-400' },
         ],
       }
     }
 
     await sleep(600)
     step.value = 6
-  } catch (e: any) {
-    calcError.value = e.response?.data?.errors ?? e.response?.data?.message ?? 'Gagal menyimpan. Coba lagi.'
+  } catch (e: unknown) {
+    calcError.value = e instanceof Error ? e.message : 'Gagal menyimpan. Coba lagi.'
     step.value = 4
   } finally {
     isSubmitting.value = false

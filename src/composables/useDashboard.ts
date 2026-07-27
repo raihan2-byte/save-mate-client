@@ -6,12 +6,14 @@ import { getToday } from '@/services/transaction.service'
 import { getPlanByMonth } from '@/services/plan.service'
 import { getMandatoryByMonth } from '@/services/mandatory.service'
 import { toLocaleDateStr, addDays, formatCurrency, formatCurrencyShort } from '@/utils/formatting'
-import { BUDGET_THRESHOLDS, SAVING_TYPES } from '@/constants/budgetConfig'
+import { BUDGET_THRESHOLDS } from '@/constants/budgetConfig'
+import { useBudgetConfigStore } from '@/stores/budgetConfig'
 import type { DailyStatus, BudgetPlan, Transaction, BudgetTrackerItem, EndDayChoice } from '@/types'
 
 export function useDashboard() {
   const auth = useAuthStore()
   const pdStore = usePersonalDataStore()
+  const budgetConfig = useBudgetConfigStore()
 
   const dailyStatus = ref<DailyStatus | null>(null)
   const budgetPlan = ref<BudgetPlan | null>(null)
@@ -87,7 +89,9 @@ export function useDashboard() {
     const salary = pd.salary ?? 0
     if (!salary) return null
     const savingType = (pd.saving_type ?? 'recommendation').toLowerCase()
-    const spend = SAVING_TYPES[savingType]?.spend ?? 0.6
+    const ratio = budgetConfig.ratioFor(savingType)
+    if (!ratio) return null
+    const spend = ratio.spend
     const available = salary - nextCycleMandatory.value
     if (!tomorrowStr.value) return null
     const td = new Date(tomorrowStr.value)
@@ -160,7 +164,7 @@ export function useDashboard() {
     buildDates()
     const now = new Date()
     try {
-      await pdStore.fetch()
+      await Promise.all([pdStore.fetch(), budgetConfig.fetch()])
       const [statusRes, txRes, planRes, tomorrowRes, mandatoryRes, endDayRes] = await Promise.all([
         getDailyStatus(todayStr.value).catch(() => null),
         getToday().catch(() => []),

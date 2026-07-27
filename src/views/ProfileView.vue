@@ -115,8 +115,10 @@ import { useAuthStore } from '@/stores/auth'
 import api from '@/api'
 import type { BudgetPlan } from '@/types/index'
 import { calcBudgetPreview } from '@/constants/budgetConfig'
+import { useBudgetConfigStore } from '@/stores/budgetConfig'
 
 const auth = useAuthStore()
+const budgetConfig = useBudgetConfigStore()
 const router = useRouter()
 
 const initial = computed(() => (auth.user?.username?.[0] ?? '?').toUpperCase())
@@ -137,7 +139,10 @@ const nextMonthLabel = computed(() => {
 const nextBudgetPreview = computed(() => {
   if (!nextSalary.value || nextSalary.value <= 0) return null
   const mandatory = budget.value?.total_mandatory ?? 0
-  return calcBudgetPreview(nextSalary.value, mandatory, savingType.value, nextMonthDays.value)
+  return calcBudgetPreview(
+    nextSalary.value, mandatory, savingType.value, nextMonthDays.value,
+    budgetConfig.ratioFor(savingType.value), budgetConfig.config?.food_pct_of_spending,
+  )
 })
 
 function fmtShort(val: number) {
@@ -148,6 +153,7 @@ function fmtShort(val: number) {
 
 onMounted(async () => {
   try {
+    await budgetConfig.fetch()
     const [bpRes, pdRes] = await Promise.allSettled([
       api.get(`/budget-plan/${now.getMonth() + 1}/${now.getFullYear()}`),
       api.get('/personal-data/'),

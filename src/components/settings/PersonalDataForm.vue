@@ -49,9 +49,7 @@
             {{ opt.icon }} {{ opt.label }}
           </button>
         </div>
-        <p v-if="modelValue.savingType" class="text-slate-500 text-xs mt-1.5">
-          {{ SAVING_TYPES[modelValue.savingType] ? `Menabung ${Math.round(SAVING_TYPES[modelValue.savingType].save * 100)}% gaji bersih` : '' }}
-        </p>
+        <p v-if="savePctLabel" class="text-slate-500 text-xs mt-1.5">{{ savePctLabel }}</p>
       </div>
 
       <div>
@@ -83,7 +81,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import AppButton from '@/components/ui/AppButton.vue'
-import { SAVING_TYPES } from '@/constants/budgetConfig'
+import { useBudgetConfigStore } from '@/stores/budgetConfig'
 
 export interface PersonalDataFormData {
   salary: number
@@ -118,6 +116,13 @@ const SAVING_LABELS: Record<string, string> = {
 }
 
 const savingLabel = computed(() => SAVING_LABELS[props.modelValue.savingType] ?? props.modelValue.savingType)
+
+const budgetConfig = useBudgetConfigStore()
+const savePctLabel = computed(() => {
+  const ratio = budgetConfig.ratioFor(props.modelValue.savingType)
+  if (!props.modelValue.savingType || !ratio) return ''
+  return `Menabung ${Math.round(ratio.save * 100)}% gaji bersih`
+})
 
 function onSalaryInput(e: Event) {
   const raw = (e.target as HTMLInputElement).value.replace(/\./g, '').replace(/[^\d]/g, '')
