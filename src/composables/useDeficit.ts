@@ -34,7 +34,6 @@ export function useDeficit(onAfterHandled: () => Promise<void>) {
       const totalDeficit = totalSpentVal - dailyBudget
       if (totalDeficit <= 0) {
         if (myVer !== _overrunVer) return
-        patchDeficitChoice(today, 'normal', 0).catch(() => {})
         return
       }
 
@@ -46,7 +45,6 @@ export function useDeficit(onAfterHandled: () => Promise<void>) {
       const incrementalDeficit = Math.max(totalDeficit - savingsAlreadyCut - tomorrowAlreadyCut, 0)
       if (myVer !== _overrunVer) return
       if (incrementalDeficit < 1) {
-        patchDeficitChoice(today, 'normal', 0).catch(() => {})
         return
       }
 
