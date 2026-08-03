@@ -25,7 +25,7 @@
         <SidebarLink to="/app/budget"       :icon="icons.budget"  label="Budget Plan" />
         <p class="text-[10px] font-semibold uppercase tracking-widest text-slate-600 px-3 mb-1 mt-5">Keuangan</p>
         <SidebarLink to="/app/income"       :icon="icons.income"  label="Pemasukan" />
-        <SidebarLink to="/app/summary"      :icon="icons.summary" label="Ringkasan Bulanan" />
+        <SidebarLink to="/app/summary"      :icon="icons.summary" label="Ringkasan Cycle" />
       </nav>
 
       <!-- Footer -->

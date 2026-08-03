@@ -74,6 +74,8 @@ export interface MonthlySummary {
   total_income: number
   total_spent: number
   total_savings: number
+  cycle_start?: string
+  cycle_end?: string
 }
 
 export interface PersonalData {

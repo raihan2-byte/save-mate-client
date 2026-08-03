@@ -174,7 +174,7 @@ const menuItems = [
   { to: '/app/budget',    icon: '📊', label: 'Budget Plan',          sub: 'Rencana keuangan bulanan',               bg: 'bg-cyan-500/15' },
   { to: '/app/income',    icon: '💰', label: 'Data Pemasukan',       sub: 'Kelola sumber penghasilan',              bg: 'bg-emerald-500/15' },
   { to: '/app/expenses',  icon: '🛍️', label: 'Data Pengeluaran',   sub: 'Riwayat pengeluaran',                    bg: 'bg-red-500/10' },
-  { to: '/app/summary',   icon: '📈', label: 'Ringkasan Bulanan',    sub: 'Laporan keuangan lengkap',               bg: 'bg-violet-500/15' },
+  { to: '/app/summary',   icon: '📈', label: 'Ringkasan Cycle',       sub: 'Laporan keuangan per cycle gaji',        bg: 'bg-violet-500/15' },
 ]
 
 function handleLogout() {

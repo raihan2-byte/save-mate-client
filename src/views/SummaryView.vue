@@ -60,7 +60,7 @@
 
       <!-- Detail stats -->
       <div class="glass-card p-5">
-        <h2 class="font-bold text-white mb-4">Detail Bulan Ini</h2>
+        <h2 class="font-bold text-white mb-4">Detail Cycle Ini</h2>
         <div class="space-y-3">
           <div v-for="item in details" :key="item.label" class="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
             <span class="text-slate-400 text-sm flex items-center gap-2"><span>{{ item.icon }}</span>{{ item.label }}</span>
@@ -96,9 +96,14 @@ const currentYear = ref(now.getFullYear())
 const summary = ref<MonthlySummary | null>(null)
 const loading = ref(true)
 
-const monthLabel = computed(() =>
-  new Date(currentYear.value, currentMonth.value - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
-)
+const monthLabel = computed(() => {
+  const s = summary.value
+  if (s?.cycle_start && s?.cycle_end) {
+    const fmt = (d: string) => new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+    return `${fmt(s.cycle_start)} — ${fmt(s.cycle_end)}`
+  }
+  return new Date(currentYear.value, currentMonth.value - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+})
 
 const net = computed(() => summary.value?.net_balance ?? 0)
 
